@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.2] - 2026-09-20
+
+### Release
+
+- Formalized the extraction fix through the issue, feature branch, pull request, integration branches, release tag, and GitHub release workflow.
+
 ## [0.1.1] - 2026-09-20
 
 ### Fixed
