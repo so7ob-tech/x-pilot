@@ -21,7 +21,16 @@ function App() {
   const refresh = async () => { const next = await send({ type: 'GET_STATE' }); if (next && !next.error) setState(next); };
   useEffect(() => { void refresh(); const listener = (message: any) => { if (message.type === 'STATE_UPDATED') setState(message.state); }; chrome.runtime.onMessage.addListener(listener); return () => chrome.runtime.onMessage.removeListener(listener); }, []);
   const act = async (message: RuntimeMessage, success?: string) => { const result = await send(message); if (result?.error) setNotice(result.error); else { if (result?.queue) setState(result); else await refresh(); if (success) setNotice(success); } };
-  const extract = async () => { if (!bankUrl.trim()) return setNotice('أدخل رابط بنك التغريدات أولًا'); await act({ type: 'EXTRACT_BANK', bankUrl: bankUrl.trim() }, 'تم استخراج الروابط'); };
+  const extract = async () => {
+    if (!bankUrl.trim()) return setNotice('أدخل رابط بنك التغريدات أولًا');
+    let parsed: URL;
+    try { parsed = new URL(bankUrl.trim()); } catch { return setNotice('رابط البنك غير صالح'); }
+    if (!['http:', 'https:'].includes(parsed.protocol)) return setNotice('يجب أن يبدأ رابط البنك بـ http أو https');
+    const originPattern = `${parsed.protocol}//${parsed.host}/*`;
+    const granted = await chrome.permissions.request({ origins: [originPattern] });
+    if (!granted) return setNotice('لم يتم منح صلاحية قراءة نطاق بنك التغريدات');
+    await act({ type: 'EXTRACT_BANK', bankUrl: bankUrl.trim() }, 'تم استخراج الروابط');
+  };
   const start = async () => { if (settings.confirmBeforeStart && !window.confirm(`بدء نشر ${remaining} عنصر؟`)) return; await act({ type: 'START', confirmed: true }, 'بدأت الجلسة'); };
   const updateSettings = async (next: Settings) => { setSettings(next); await act({ type: 'UPDATE_SETTINGS', settings: next }); };
   return <main className="shell">
