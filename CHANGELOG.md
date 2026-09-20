@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.1] - Unreleased
+
+### Fixed
+
+- Failed attempts now enter `WAITING` with a persisted Alarm for the next retry.
+- The Queue persists the next item before waiting after a successful publish.
+- The alarm handler prefers the persisted current item and no longer depends on recursive retry calls.
+- Exhausted failures with Continue advance to the next item; exhausted failures with Pause remain paused.
+
 ## [0.3.0] - Unreleased
 
 ### Added

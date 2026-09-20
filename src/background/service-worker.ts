@@ -1,7 +1,7 @@
 import type { AppState, AutomationSession, ContentInspection, QueueItem, RuntimeMessage, Settings } from '../domain/models';
 import { defaultSettings } from '../domain/models';
 import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
-import { canStartItem, getNextPendingItem, isTerminalItem } from '../domain/state-machine';
+import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
 import { addAttempt, getSettings, getState, saveQueue, saveSession, saveSettings, updateState } from '../storage/storage-repository';
 
@@ -112,14 +112,17 @@ async function processCurrentItem(): Promise<void> {
     if (!result?.ok) throw new Error(result?.reason ?? 'PUBLISH_FAILED');
     const finalStatus = after.composerFound && after.contentPresent ? 'PUBLISHED_UNVERIFIED' : 'PUBLISHED';
     const finishedAt = Date.now();
-    const nextRunAt = finishedAt + session.intervalMinutes * 60_000;
+    const nextItem = getNextPendingItem((await getState()).queue, item.id);
+    const nextRunAt = nextItem ? finishedAt + session.intervalMinutes * 60_000 : undefined;
+    const nextStatus = nextItem ? 'WAITING' : 'COMPLETED';
     const nextState = await updateState((current) => ({
       ...current,
       queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: finalStatus, publishedAt: finishedAt, updatedAt: finishedAt, operationId: undefined } : candidate),
-      session: current.session ? { ...current.session, status: 'WAITING', nextRunAt, updatedAt: finishedAt } : null,
+      session: current.session ? { ...current.session, status: nextStatus, currentItemId: nextItem?.id, currentIndex: nextItem?.position ?? current.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? finishedAt : current.session.completedAt, updatedAt: finishedAt } : null,
       history: [...current.history, { id: crypto.randomUUID(), queueItemId: item.id, link: item.targetUrl, timestamp: finishedAt, attemptNumber: item.attempts + 1, action: 'PUBLISH', result: finalStatus }]
     }));
-    await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
+    await chrome.alarms.clear(ALARM_NAME);
+    if (nextRunAt) await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
     await broadcast(nextState);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
@@ -136,24 +139,26 @@ async function processCurrentItem(): Promise<void> {
     const exhausted = !latestItem || latestItem.attempts >= session.maxRetries + 1;
     const failedStatus = exhausted ? 'FAILED' : 'PENDING';
     const nextItem = exhausted && session.failureBehavior === 'CONTINUE' ? getNextPendingItem(current.queue, item.id) : undefined;
-    const nextRunAt = nextItem ? Date.now() + session.intervalMinutes * 60_000 : undefined;
-    const nextStatus = exhausted && session.failureBehavior === 'PAUSE' ? 'PAUSED' : nextItem ? 'WAITING' : exhausted ? 'COMPLETED' : 'RUNNING';
+    const nextRunAt = !exhausted || nextItem ? Date.now() + session.intervalMinutes * 60_000 : undefined;
+    const nextStatus = exhausted && session.failureBehavior === 'PAUSE' ? 'PAUSED' : nextItem || !exhausted ? 'WAITING' : 'COMPLETED';
+    const nextItemId = nextItem?.id ?? (!exhausted ? item.id : undefined);
+    const nextItemIndex = nextItem?.position ?? (!exhausted ? item.position : current.session?.currentIndex);
     const failedState = await updateState((currentState) => ({
       ...currentState,
       queue: currentState.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: failedStatus, lastError: message, operationId: undefined, updatedAt: Date.now() } : candidate),
-      session: currentState.session ? { ...currentState.session, status: nextStatus, currentItemId: nextItem?.id, currentIndex: nextItem?.position ?? currentState.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? Date.now() : currentState.session.completedAt, updatedAt: Date.now() } : null,
+      session: currentState.session ? { ...currentState.session, status: nextStatus, currentItemId: nextItemId, currentIndex: nextItemIndex ?? currentState.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? Date.now() : currentState.session.completedAt, updatedAt: Date.now() } : null,
       history: [...currentState.history, { id: crypto.randomUUID(), queueItemId: item.id, link: item.targetUrl, timestamp: Date.now(), attemptNumber: item.attempts + 1, action: 'PUBLISH', result: failedStatus, error: message }]
     }));
+    await chrome.alarms.clear(ALARM_NAME);
     if (nextRunAt) await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
     await broadcast(failedState);
-    if (nextStatus === 'RUNNING') await processCurrentItem();
   }
 }
 
 async function advanceSession(): Promise<void> {
   const state = await getState();
   if (!state.session || state.session.status !== 'WAITING') return;
-  const next = state.queue.find((item) => !isTerminalItem(item.status) && item.status !== 'FAILED');
+  const next = getNextRunnableItem(state.queue, state.session.currentItemId);
   if (!next) {
     const completed = await updateState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'COMPLETED', completedAt: Date.now(), nextRunAt: undefined, updatedAt: Date.now() } : null }));
     await broadcast(completed);
