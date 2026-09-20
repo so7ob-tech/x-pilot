@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.4] - Unreleased
+
+### Fixed
+
+- Opens the X target in the background first and activates the automation tab only after navigation completes.
+- Gives X a short foreground-rendering window before readiness polling.
+- Preserves restoration of the user's previous tab after the operation.
+
 ## [0.3.3] - Unreleased
 
 ### Fixed
