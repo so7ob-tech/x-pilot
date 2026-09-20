@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.2] - Unreleased
+
+### Fixed
+
+- Broadens X publish-control detection across button, role, data-testid, aria-label, title, and nested text variants.
+- Normalizes Arabic whitespace, tatweel, and diacritics.
+- Rejects hidden, disabled, reply, Add Post, and Post All controls before clicking.
+- Adds regression coverage for localized publish labels.
+
 ## [0.3.1] - Unreleased
 
 ### Fixed
