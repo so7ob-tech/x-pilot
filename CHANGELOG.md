@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.5] - 2026-09-20
+
+### Added
+
+- Queue rows now show a concise preview decoded from the tweet intent URL instead of the long URL.
+- Queue actions remain visible with fixed-width controls on narrow Side Panels.
+- Added a seconds countdown derived from the persisted `nextRunAt` timestamp.
+- Added preview and Unicode truncation tests.
+
 ## [0.1.4] - 2026-09-20
 
 ### Fixed

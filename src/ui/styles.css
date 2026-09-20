@@ -1,1 +1,46 @@
-:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #172033; background: #f4f7fb; } * { box-sizing: border-box; } body { margin: 0; min-width: 360px; } .shell { max-width: 720px; margin: 0 auto; padding: 20px; } header, .section-heading, .row, .stats, .queue-row { display: flex; align-items: center; gap: 10px; } header, .section-heading { justify-content: space-between; } h1 { margin: 4px 0 18px; font-size: 26px; } h2 { margin: 0 0 14px; font-size: 17px; } .eyebrow { color: #58708f; font-size: 11px; font-weight: 800; letter-spacing: .08em; } .card { background: white; border: 1px solid #dce4ef; border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: 0 6px 20px #193a5b0b; } input { width: 100%; border: 1px solid #cbd6e3; border-radius: 10px; padding: 10px 12px; font: inherit; background: #fff; } .row input { flex: 1; } label { display: block; font-size: 13px; font-weight: 700; margin-top: 12px; } label input { margin-top: 6px; } .check { display: flex; gap: 8px; align-items: center; } .check input { width: auto; margin: 0; } button { border: 1px solid #c5d1df; background: #f8fafc; color: #26364d; border-radius: 9px; padding: 9px 12px; font: inherit; cursor: pointer; white-space: nowrap; } button:hover { background: #edf3fa; } button:disabled { cursor: not-allowed; opacity: .45; } button.primary { color: white; border-color: #1c65d1; background: #1c65d1; } button.danger { color: #a42020; } .notice { padding: 10px 12px; border-radius: 10px; color: #214a75; background: #e6f1ff; margin-bottom: 14px; } .muted, footer { color: #6b7b91; font-size: 12px; line-height: 1.6; } .stats { margin-bottom: 14px; } .stats div { flex: 1; background: #fff; border: 1px solid #dce4ef; border-radius: 14px; padding: 12px; text-align: center; } .stats b, .stats span { display: block; } .stats b { font-size: 22px; } .stats span { color: #6b7b91; font-size: 11px; margin-top: 3px; } .status { border-radius: 999px; padding: 5px 10px; font-size: 11px; font-weight: 800; } .status-RUNNING { color: #075d2d; background: #d9f6e4; } .status-PAUSED, .status-WAITING { color: #785400; background: #fff0c6; } .status-COMPLETED { color: #075d2d; background: #d9f6e4; } .status-IDLE, .status-STOPPED { color: #53667e; background: #e9eff6; } .queue { display: grid; gap: 8px; } .queue-row { align-items: flex-start; border-top: 1px solid #edf1f6; padding-top: 9px; } .position { width: 28px; height: 28px; display: grid; place-items: center; background: #eef4fb; color: #3b587a; border-radius: 50%; font-size: 12px; } .item-main { min-width: 0; flex: 1; } .item-main a { color: #175fbe; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; } .item-main small { display: block; color: #7c8ca0; margin-top: 4px; font-size: 11px; } .item-actions { display: flex; gap: 4px; } .item-actions button { padding: 5px 8px; } footer { margin: 16px 2px 6px; }
+:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #172033; background: #f4f7fb; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 360px; }
+.shell { max-width: 720px; margin: 0 auto; padding: 20px; }
+header, .section-heading, .row, .stats, .queue-row { display: flex; align-items: center; gap: 10px; }
+header, .section-heading { justify-content: space-between; }
+h1 { margin: 4px 0 18px; font-size: 26px; }
+h2 { margin: 0 0 14px; font-size: 17px; }
+.eyebrow { color: #58708f; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+.card { background: white; border: 1px solid #dce4ef; border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: 0 6px 20px #193a5b0b; }
+input { width: 100%; border: 1px solid #cbd6e3; border-radius: 10px; padding: 10px 12px; font: inherit; background: #fff; }
+.row input { flex: 1; }
+label { display: block; font-size: 13px; font-weight: 700; margin-top: 12px; }
+label input { margin-top: 6px; }
+.check { display: flex; gap: 8px; align-items: center; }
+.check input { width: auto; margin: 0; }
+button { border: 1px solid #c5d1df; background: #f8fafc; color: #26364d; border-radius: 9px; padding: 9px 12px; font: inherit; cursor: pointer; white-space: nowrap; }
+button:hover { background: #edf3fa; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+button.primary { color: white; border-color: #1c65d1; background: #1c65d1; }
+button.danger { color: #a42020; }
+.notice { padding: 10px 12px; border-radius: 10px; color: #214a75; background: #e6f1ff; margin-bottom: 14px; }
+.muted, footer { color: #6b7b91; font-size: 12px; line-height: 1.6; }
+.stats { margin-bottom: 14px; }
+.stats div { flex: 1; background: #fff; border: 1px solid #dce4ef; border-radius: 14px; padding: 12px; text-align: center; }
+.stats b, .stats span { display: block; }
+.stats b { font-size: 22px; }
+.stats span { color: #6b7b91; font-size: 11px; margin-top: 3px; }
+.status { border-radius: 999px; padding: 5px 10px; font-size: 11px; font-weight: 800; }
+.status-RUNNING { color: #075d2d; background: #d9f6e4; }
+.status-PAUSED, .status-WAITING { color: #785400; background: #fff0c6; }
+.status-COMPLETED { color: #075d2d; background: #d9f6e4; }
+.status-IDLE, .status-STOPPED { color: #53667e; background: #e9eff6; }
+.queue { display: grid; gap: 8px; }
+.queue-row { align-items: flex-start; border-top: 1px solid #edf1f6; padding-top: 9px; }
+.position { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; background: #eef4fb; color: #3b587a; border-radius: 50%; font-size: 12px; }
+.item-main { min-width: 0; flex: 1; }
+.preview { color: #1d2d45; display: -webkit-box; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: 3; -webkit-box-orient: vertical; font-size: 13px; line-height: 1.55; }
+.source-link { color: #175fbe; display: inline-block; margin-top: 4px; font-size: 11px; }
+.item-main small { display: block; color: #7c8ca0; margin-top: 4px; font-size: 11px; }
+.item-actions { display: flex; flex: 0 0 auto; gap: 4px; }
+.item-actions button { flex: 0 0 auto; padding: 5px 8px; }
+.countdown { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: #fff7df; color: #745100; }
+.countdown span { font-size: 12px; }
+.countdown strong { direction: ltr; font-variant-numeric: tabular-nums; font-size: 22px; letter-spacing: .05em; }
+footer { margin: 16px 2px 6px; }
