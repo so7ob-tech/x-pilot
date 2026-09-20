@@ -7,8 +7,11 @@ const composerSelectors = [
   '[data-testid="tweetTextarea_0"] [contenteditable="true"]',
   'textarea[aria-label*="Post"]',
   'textarea[aria-label*="Tweet"]',
+  'textarea[aria-label*="نص المنشور"]',
+  'textarea[aria-label*="منشور"]',
   'textarea[placeholder*="Post"]',
-  'textarea[placeholder*="Tweet"]'
+  'textarea[placeholder*="Tweet"]',
+  'textarea[placeholder*="منشور"]'
 ];
 
 const postButtonSelectors = [
@@ -16,7 +19,9 @@ const postButtonSelectors = [
   '[data-testid="tweetButton"]',
   'button[data-testid*="tweetButton"]',
   'button[aria-label="Post"]',
-  'button[aria-label="Tweet"]'
+  'button[aria-label="Tweet"]',
+  'button[aria-label="نشر"]',
+  'button[aria-label="غرد"]'
 ];
 
 function findFirst(selectors: string[]): HTMLElement | null {
@@ -29,6 +34,20 @@ function findFirst(selectors: string[]): HTMLElement | null {
 
 function readText(element: HTMLElement): string {
   return (element instanceof HTMLTextAreaElement ? element.value : element.innerText || element.textContent || '').trim();
+}
+
+export function isPublishButtonLabel(value: string): boolean {
+  const label = value.replace(/\s+/gu, ' ').trim().toLocaleLowerCase();
+  return ['post', 'tweet', 'نشر', 'غرد'].includes(label);
+}
+
+function findPostButton(): HTMLElement | null {
+  const selected = findFirst(postButtonSelectors);
+  if (selected && isPublishButtonLabel(readText(selected) || selected.getAttribute('aria-label') || '')) return selected;
+  return Array.from(document.querySelectorAll<HTMLElement>('button,[role="button"]')).find((button) => {
+    const label = readText(button) || button.getAttribute('aria-label') || '';
+    return isPublishButtonLabel(label);
+  }) ?? null;
 }
 
 export function inspect(): ContentInspection {
@@ -44,7 +63,7 @@ export function inspect(): ContentInspection {
     return { ok: false, pageKind: 'CHALLENGE', composerFound: false, contentPresent: false, postButtonFound: false, postButtonEnabled: false, reason: 'CAPTCHA_OR_SECURITY_CHALLENGE' };
   }
   const composer = findFirst(composerSelectors);
-  const postButton = findFirst(postButtonSelectors);
+  const postButton = findPostButton();
   const contentPresent = composer ? readText(composer).length > 0 : false;
   const postButtonEnabled = Boolean(postButton && !postButton.hasAttribute('disabled') && postButton.getAttribute('aria-disabled') !== 'true');
   const ok = Boolean(composer && contentPresent && postButton && postButtonEnabled);
@@ -54,7 +73,7 @@ export function inspect(): ContentInspection {
 export function publish(): ContentInspection {
   const state = inspect();
   if (!state.ok) return state;
-  const button = findFirst(postButtonSelectors);
+  const button = findPostButton();
   if (!button) return { ...state, ok: false, postButtonFound: false, reason: 'POST_BUTTON_NOT_FOUND' };
   button.click();
   return { ...state, ok: true };
