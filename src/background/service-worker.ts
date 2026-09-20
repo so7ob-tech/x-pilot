@@ -44,13 +44,27 @@ async function getOrCreateAutomationTab(session: AutomationSession): Promise<num
 async function waitForTabLoad(tabId: number, timeoutMs = 20000): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let timer: number | undefined;
+    let settled = false;
     const cleanup = () => { chrome.tabs.onUpdated.removeListener(listener); if (timer) clearTimeout(timer); };
+    const finish = () => { if (settled) return; settled = true; cleanup(); resolve(); };
     const listener = (updatedTabId: number, changeInfo: { status?: string }) => {
-      if (updatedTabId === tabId && changeInfo.status === 'complete') { cleanup(); resolve(); }
+      if (updatedTabId === tabId && changeInfo.status === 'complete') finish();
     };
     chrome.tabs.onUpdated.addListener(listener);
+    void chrome.tabs.get(tabId).then((tab) => { if (tab.status === 'complete') finish(); }).catch(() => undefined);
     timer = setTimeout(() => { cleanup(); reject(new Error('TAB_LOAD_TIMEOUT')); }, timeoutMs) as unknown as number;
   });
+}
+
+async function activateAutomationTab(tabId: number): Promise<number | undefined> {
+  const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const previousActiveTabId = activeTab?.id && activeTab.id !== tabId ? activeTab.id : undefined;
+  await chrome.tabs.update(tabId, { active: true });
+  return previousActiveTabId;
+}
+
+async function restoreActiveTab(tabId: number | undefined): Promise<void> {
+  if (tabId) await chrome.tabs.update(tabId, { active: true }).catch(() => undefined);
 }
 
 async function inspectTab(tabId: number): Promise<ContentInspection> {
@@ -95,8 +109,10 @@ async function processCurrentItem(): Promise<void> {
     queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'OPENING', attempts: candidate.attempts + 1, startedAt, operationId, updatedAt: startedAt } : candidate)
   }));
   const tabId = await getOrCreateAutomationTab(session);
+  let previousActiveTabId: number | undefined;
   try {
-    await chrome.tabs.update(tabId, { url: item.targetUrl, active: false });
+    previousActiveTabId = await activateAutomationTab(tabId);
+    await chrome.tabs.update(tabId, { url: item.targetUrl, active: true });
     await waitForTabLoad(tabId);
     await waitForPublishReady(tabId);
     await assertOperationActive(item.id, operationId);
@@ -123,6 +139,7 @@ async function processCurrentItem(): Promise<void> {
     }));
     await chrome.alarms.clear(ALARM_NAME);
     if (nextRunAt) await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
+    await restoreActiveTab(previousActiveTabId);
     await broadcast(nextState);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
@@ -131,6 +148,7 @@ async function processCurrentItem(): Promise<void> {
         ...current,
         queue: current.queue.map((candidate) => candidate.id === item.id && candidate.operationId === operationId && candidate.status !== 'PUBLISHING' ? { ...candidate, status: 'PENDING', operationId: undefined, updatedAt: Date.now() } : candidate)
       }));
+      await restoreActiveTab(previousActiveTabId);
       await broadcast(interruptedState);
       return;
     }
@@ -151,6 +169,7 @@ async function processCurrentItem(): Promise<void> {
     }));
     await chrome.alarms.clear(ALARM_NAME);
     if (nextRunAt) await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
+    await restoreActiveTab(previousActiveTabId);
     await broadcast(failedState);
   }
 }
