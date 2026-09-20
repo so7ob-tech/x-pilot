@@ -1,7 +1,7 @@
 import type { AppState, AutomationSession, ContentInspection, QueueItem, RuntimeMessage, Settings } from '../domain/models';
 import { defaultSettings } from '../domain/models';
 import { canStartItem, isTerminalItem } from '../domain/state-machine';
-import { extractLinks, normalizeTargetUrl } from '../extraction/bank-parser';
+import { extractLinksFromValues } from '../extraction/bank-parser';
 import { addAttempt, getSettings, getState, saveQueue, saveSession, saveSettings, updateState } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
@@ -122,22 +122,22 @@ async function extractBank(bankUrl: string): Promise<AppState> {
   const tab = await chrome.tabs.create({ url: bankUrl, active: false });
   if (!tab.id) throw new Error('BANK_TAB_CREATE_FAILED');
   await waitForTabLoad(tab.id);
-  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).map((a) => ({ href: a.href, label: a.textContent?.trim() || undefined })) });
+  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => ({
+    anchors: Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).map((a) => ({ raw: a.href, label: a.textContent?.trim() || undefined })),
+    markup: document.documentElement.outerHTML
+  }) });
   await chrome.tabs.remove(tab.id);
-  const seen = new Set<string>();
+  const extraction = extractLinksFromValues([
+    ...((result as { anchors?: Array<{ raw: string; label?: string }> } | undefined)?.anchors ?? []),
+    { raw: (result as { markup?: string } | undefined)?.markup ?? '' }
+  ]);
   const queue: QueueItem[] = [];
-  let duplicateCount = 0;
-  let invalidCount = 0;
-  for (const raw of (result ?? []) as Array<{ href: string; label?: string }>) {
-    const url = normalizeTargetUrl(raw.href);
-    if (!url) { invalidCount += 1; continue; }
-    if (seen.has(url)) { duplicateCount += 1; continue; }
-    seen.add(url);
-    queue.push({ id: crypto.randomUUID(), sourceBankUrl: bankUrl, targetUrl: url, label: raw.label, position: queue.length + 1, status: 'PENDING', attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
+  for (const extracted of extraction.links) {
+    queue.push({ id: crypto.randomUUID(), sourceBankUrl: bankUrl, targetUrl: extracted.url, label: extracted.label, position: queue.length + 1, status: 'PENDING', attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
   }
   const nextState = await updateState((state) => ({ ...state, queue, session: { ...state.session, id: crypto.randomUUID(), bankUrl, status: 'IDLE', currentIndex: 0, total: queue.length, intervalMinutes: defaultSettings.intervalMinutes, maxRetries: defaultSettings.maxRetries, failureBehavior: defaultSettings.failureBehavior, confirmBeforeStart: defaultSettings.confirmBeforeStart, keepAutomationTabOpen: defaultSettings.keepAutomationTabOpen, closeTabOnComplete: defaultSettings.closeTabOnComplete, version: 1, updatedAt: Date.now() } }));
   await broadcast(nextState);
-  console.info('Extracted bank', { total: queue.length, duplicateCount, invalidCount });
+  console.info('Extracted bank', { total: queue.length, duplicateCount: extraction.duplicateCount, invalidCount: extraction.invalidCount });
   return nextState;
 }
 

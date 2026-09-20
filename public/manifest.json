@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "X Queue Publisher",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "إدارة محلية لقائمة روابط تجهيز منشورات X مع جدولة واستمرارية.",
   "minimum_chrome_version": "114",
   "permissions": ["storage", "alarms", "tabs", "scripting", "sidePanel", "activeTab"],

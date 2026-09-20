@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1] - 2026-09-20
+
+### Fixed
+
+- Bank extraction now reads X/Twitter intent URLs embedded in raw Google Sites markup, including HTML-encoded query parameters.
+- The UI reports the actual number of extracted links instead of reporting success when the Queue is empty.
+- Added parser tests for encoded links, duplicates, and unrelated page links.
+
 ## [0.1.0] - 2026-09-20
 
 ### Added
