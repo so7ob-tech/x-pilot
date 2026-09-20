@@ -29,7 +29,10 @@ function App() {
     const originPattern = `${parsed.protocol}//${parsed.host}/*`;
     const granted = await chrome.permissions.request({ origins: [originPattern] });
     if (!granted) return setNotice('لم يتم منح صلاحية قراءة نطاق بنك التغريدات');
-    await act({ type: 'EXTRACT_BANK', bankUrl: bankUrl.trim() }, 'تم استخراج الروابط');
+    const result = await send({ type: 'EXTRACT_BANK', bankUrl: bankUrl.trim() });
+    if (result?.error) return setNotice(`فشل الاستخراج: ${result.error}`);
+    if (result?.queue) setState(result);
+    setNotice(`تم العثور على ${result?.queue?.length ?? 0} رابطًا`);
   };
   const start = async () => { if (settings.confirmBeforeStart && !window.confirm(`بدء نشر ${remaining} عنصر؟`)) return; await act({ type: 'START', confirmed: true }, 'بدأت الجلسة'); };
   const updateSettings = async (next: Settings) => { setSettings(next); await act({ type: 'UPDATE_SETTINGS', settings: next }); };
