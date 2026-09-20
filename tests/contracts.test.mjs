@@ -61,8 +61,9 @@ test('non-exhausted failures schedule a retry instead of recursively retrying', 
 
 test('automation activates X before readiness polling and restores the previous tab', () => {
   assert.match(serviceWorker, /chrome\.tabs\.query\(\{ active: true, lastFocusedWindow: true \}\)/);
-  assert.match(serviceWorker, /await chrome\.tabs\.update\(tabId, \{ active: true \}\)/);
-  assert.match(serviceWorker, /await chrome\.tabs\.update\(tabId, \{ url: item\.targetUrl, active: true \}\)/);
+  assert.match(serviceWorker, /await chrome\.tabs\.update\(tabId, \{ url: item\.targetUrl, active: false \}\)/);
+  assert.match(serviceWorker, /await waitForTabLoad\(tabId\);\n    await activateAutomationTab\(tabId\)/);
+  assert.match(serviceWorker, /async function activateAutomationTab\(tabId: number\): Promise<void>/);
   assert.match(serviceWorker, /await restoreActiveTab\(previousActiveTabId\)/);
   assert.match(serviceWorker, /if \(tab\.status === 'complete'\) finish\(\)/);
 });

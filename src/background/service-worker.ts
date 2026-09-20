@@ -56,11 +56,13 @@ async function waitForTabLoad(tabId: number, timeoutMs = 20000): Promise<void> {
   });
 }
 
-async function activateAutomationTab(tabId: number): Promise<number | undefined> {
+async function getPreviousActiveTabId(tabId: number): Promise<number | undefined> {
   const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  const previousActiveTabId = activeTab?.id && activeTab.id !== tabId ? activeTab.id : undefined;
+  return activeTab?.id && activeTab.id !== tabId ? activeTab.id : undefined;
+}
+
+async function activateAutomationTab(tabId: number): Promise<void> {
   await chrome.tabs.update(tabId, { active: true });
-  return previousActiveTabId;
 }
 
 async function restoreActiveTab(tabId: number | undefined): Promise<void> {
@@ -109,11 +111,12 @@ async function processCurrentItem(): Promise<void> {
     queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'OPENING', attempts: candidate.attempts + 1, startedAt, operationId, updatedAt: startedAt } : candidate)
   }));
   const tabId = await getOrCreateAutomationTab(session);
-  let previousActiveTabId: number | undefined;
+  const previousActiveTabId = await getPreviousActiveTabId(tabId);
   try {
-    previousActiveTabId = await activateAutomationTab(tabId);
-    await chrome.tabs.update(tabId, { url: item.targetUrl, active: true });
+    await chrome.tabs.update(tabId, { url: item.targetUrl, active: false });
     await waitForTabLoad(tabId);
+    await activateAutomationTab(tabId);
+    await wait(300);
     await waitForPublishReady(tabId);
     await assertOperationActive(item.id, operationId);
     await updateState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'READY', updatedAt: Date.now() } : candidate) }));
