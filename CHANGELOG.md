@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0] - Unreleased
+
+### Added
+
+- Added persisted Queue recovery on browser startup and extension installation.
+- Interrupted items are normalized back to `PENDING` without being marked published.
+- Future waiting alarms are recreated idempotently from `nextRunAt`.
+- Expired active sessions become `PAUSED` and require explicit Resume.
+- Paused sessions remain paused across restart and published items are protected.
+
 ## [0.2.0] - Unreleased
 
 ### Added
