@@ -62,6 +62,12 @@ async function waitForPublishReady(tabId: number, timeoutMs = 25000, intervalMs 
   throw new Error(lastInspection?.reason ?? 'PUBLISH_CONTROLS_NOT_READY');
 }
 
+async function assertOperationActive(itemId: string, operationId: string): Promise<void> {
+  const state = await getState();
+  const item = state.queue.find((candidate) => candidate.id === itemId);
+  if (state.session?.status !== 'RUNNING' || item?.operationId !== operationId) throw new Error('AUTOMATION_INTERRUPTED');
+}
+
 async function processCurrentItem(): Promise<void> {
   const state = await getState();
   const session = state.session;
@@ -79,10 +85,12 @@ async function processCurrentItem(): Promise<void> {
     await chrome.tabs.update(tabId, { url: item.targetUrl, active: false });
     await waitForTabLoad(tabId);
     await waitForPublishReady(tabId);
+    await assertOperationActive(item.id, operationId);
     await updateState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'READY', updatedAt: Date.now() } : candidate) }));
     const lockedState = await getState();
     const lockedItem = lockedState.queue.find((candidate) => candidate.id === item.id);
     if (!lockedItem || lockedItem.operationId !== operationId || lockedItem.status !== 'READY') throw new Error('ITEM_LOCK_LOST');
+    await assertOperationActive(item.id, operationId);
     await updateState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'PUBLISHING', updatedAt: Date.now() } : candidate) }));
     const result = await chrome.tabs.sendMessage(tabId, { type: 'X_PUBLISH' });
     await wait(1800);
@@ -101,6 +109,14 @@ async function processCurrentItem(): Promise<void> {
     await broadcast(nextState);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+    if (message === 'AUTOMATION_INTERRUPTED') {
+      const interruptedState = await updateState((current) => ({
+        ...current,
+        queue: current.queue.map((candidate) => candidate.id === item.id && candidate.operationId === operationId && candidate.status !== 'PUBLISHING' ? { ...candidate, status: 'PENDING', operationId: undefined, updatedAt: Date.now() } : candidate)
+      }));
+      await broadcast(interruptedState);
+      return;
+    }
     const current = await getState();
     const latestItem = current.queue.find((candidate) => candidate.id === item.id);
     const exhausted = !latestItem || latestItem.attempts >= session.maxRetries + 1;
@@ -167,8 +183,34 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       const state = await updateState((current) => ({ ...current, session: current.session ? { ...current.session, ...settings, status: 'RUNNING', startedAt: current.session.startedAt ?? Date.now(), currentItemId: current.session.currentItemId ?? current.queue.find((item) => item.status === 'PENDING')?.id, updatedAt: Date.now() } : null }));
       await broadcast(state); await processCurrentItem(); return getState();
     }
-    case 'PAUSE': await chrome.alarms.clear(ALARM_NAME); return updateState((state) => ({ ...state, session: state.session ? { ...state.session, status: 'PAUSED', pausedAt: Date.now(), updatedAt: Date.now() } : null }));
-    case 'RESUME': return handleMessage({ type: 'START' });
+    case 'PAUSE': {
+      await chrome.alarms.clear(ALARM_NAME);
+      const paused = await updateState((state) => ({
+        ...state,
+        queue: state.queue.map((item) => item.id === state.session?.currentItemId && (item.status === 'OPENING' || item.status === 'READY') ? { ...item, status: 'PENDING', operationId: undefined, updatedAt: Date.now() } : item),
+        session: state.session ? { ...state.session, status: 'PAUSED', pausedAt: Date.now(), nextRunAt: state.session.status === 'WAITING' ? state.session.nextRunAt : undefined, updatedAt: Date.now() } : null
+      }));
+      await broadcast(paused);
+      return paused;
+    }
+    case 'RESUME': {
+      const current = await getState();
+      if (!current.session || current.session.status !== 'PAUSED') return current;
+      const nextRunAt = current.session.nextRunAt;
+      const hasFutureAlarm = Boolean(nextRunAt && nextRunAt > Date.now());
+      if (hasFutureAlarm && nextRunAt) {
+        await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
+        const waiting = await updateState((state) => ({ ...state, session: state.session ? { ...state.session, status: 'WAITING', pausedAt: undefined, updatedAt: Date.now() } : null }));
+        await broadcast(waiting);
+        return waiting;
+      }
+      const currentItem = current.queue.find((item) => item.id === current.session?.currentItemId && canStartItem(item.status));
+      const next = currentItem ?? getNextPendingItem(current.queue);
+      const running = await updateState((state) => ({ ...state, session: state.session ? { ...state.session, status: 'RUNNING', pausedAt: undefined, nextRunAt: undefined, currentItemId: next?.id, currentIndex: next?.position ?? state.session.currentIndex, updatedAt: Date.now() } : null }));
+      await broadcast(running);
+      if (next) await processCurrentItem();
+      return running;
+    }
     case 'STOP': await chrome.alarms.clear(ALARM_NAME); return updateState((state) => ({ ...state, session: state.session ? { ...state.session, status: 'STOPPED', nextRunAt: undefined, updatedAt: Date.now() } : null }));
     case 'SKIP_CURRENT': return updateState((state) => ({ ...state, queue: state.queue.map((item) => item.id === state.session?.currentItemId ? { ...item, status: 'SKIPPED', updatedAt: Date.now() } : item) }));
     case 'RETRY_ITEM': return updateState((state) => ({ ...state, queue: state.queue.map((item) => item.id === message.itemId ? { ...item, status: 'PENDING', attempts: 0, lastError: undefined, updatedAt: Date.now() } : item) }));

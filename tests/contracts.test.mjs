@@ -31,3 +31,10 @@ test('failed Continue path schedules the next item and its countdown alarm', () 
   assert.match(serviceWorker, /nextItem \? 'WAITING'/);
   assert.match(serviceWorker, /if \(nextRunAt\) await chrome\.alarms\.create/);
 });
+
+test('Pause clears the active alarm and Resume recreates a waiting alarm', () => {
+  assert.match(serviceWorker, /case 'PAUSE': \{[\s\S]*chrome\.alarms\.clear\(ALARM_NAME\)/);
+  assert.match(serviceWorker, /const nextRunAt = current\.session\.nextRunAt/);
+  assert.match(serviceWorker, /const hasFutureAlarm = Boolean\(nextRunAt/);
+  assert.match(serviceWorker, /if \(hasFutureAlarm && nextRunAt\) \{[\s\S]*chrome\.alarms\.create\(ALARM_NAME/);
+});

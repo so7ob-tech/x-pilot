@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0] - Unreleased
+
+### Added
+
+- Added persisted Pause and Resume controls for Queue automation.
+- Pause clears active alarms without advancing the current item.
+- Resume continues the current eligible item or recreates a waiting alarm.
+- Added state-machine and service-worker contract coverage for the lifecycle.
+
 ## [0.1.6] - 2026-09-20
 
 ### Fixed
