@@ -7,6 +7,7 @@ const root = path.resolve(new URL('..', import.meta.url).pathname);
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public/manifest.json'), 'utf8'));
 const serviceWorker = fs.readFileSync(path.join(root, 'src/background/service-worker.ts'), 'utf8');
+const contentEntry = fs.readFileSync(path.join(root, 'src/content/content-entry.ts'), 'utf8');
 
  test('package and manifest versions stay synchronized', () => {
   assert.equal(packageJson.version, manifest.version);
@@ -66,4 +67,25 @@ test('automation activates X before readiness polling and restores the previous 
   assert.match(serviceWorker, /async function activateAutomationTab\(tabId: number\): Promise<void>/);
   assert.match(serviceWorker, /await restoreActiveTab\(previousActiveTabId\)/);
   assert.match(serviceWorker, /if \(tab\.status === 'complete'\) finish\(\)/);
+});
+
+test('content injection is guarded per tab and cleaned on tab lifecycle events', () => {
+  assert.match(serviceWorker, /const injectedContentTabs = new Set<number>\(\)/);
+  assert.match(serviceWorker, /const contentInjectionInFlight = new Map<number, Promise<void>>\(\)/);
+  assert.match(serviceWorker, /chrome\.tabs\.onUpdated\.addListener\(\(tabId, changeInfo\) => \{[\s\S]*injectedContentTabs\.delete\(tabId\)/);
+  assert.match(serviceWorker, /chrome\.tabs\.onRemoved\.addListener\(\(tabId\) => \{[\s\S]*contentInjectionInFlight\.delete\(tabId\)/);
+  assert.match(serviceWorker, /async function ensureContentScript\(tabId: number\)/);
+  assert.match(serviceWorker, /if \(existing\) return existing/);
+  assert.match(serviceWorker, /await ensureContentScript\(tabId\)/);
+});
+
+test('content-entry installs only one runtime message listener per page', () => {
+  assert.match(contentEntry, /__xPilotContentListenerInstalled/);
+  assert.match(contentEntry, /if \(!contentGlobal\[listenerKey\]\)/);
+});
+
+test('bank extraction always removes its temporary tab in finally', () => {
+  assert.match(serviceWorker, /async function extractBank\(bankUrl: string\)/);
+  assert.match(serviceWorker, /let bankTabId: number \| undefined/);
+  assert.match(serviceWorker, /finally \{[\s\S]*if \(bankTabId\) await chrome\.tabs\.remove\(bankTabId\)\.catch/);
 });

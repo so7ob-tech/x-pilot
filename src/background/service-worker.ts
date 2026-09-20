@@ -8,6 +8,16 @@ import { addAttempt, getSettings, getState, saveQueue, saveSession, saveSettings
 const ALARM_NAME = 'x-queue-next-item';
 const AUTOMATION_TAB_KEY = 'automationTabId';
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const injectedContentTabs = new Set<number>();
+const contentInjectionInFlight = new Map<number, Promise<void>>();
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === 'loading') injectedContentTabs.delete(tabId);
+});
+chrome.tabs.onRemoved.addListener((tabId) => {
+  injectedContentTabs.delete(tabId);
+  contentInjectionInFlight.delete(tabId);
+});
 
 async function broadcast(state?: AppState) {
   const snapshot = state ?? await getState();
@@ -69,11 +79,22 @@ async function restoreActiveTab(tabId: number | undefined): Promise<void> {
   if (tabId) await chrome.tabs.update(tabId, { active: true }).catch(() => undefined);
 }
 
+async function ensureContentScript(tabId: number): Promise<void> {
+  if (injectedContentTabs.has(tabId)) return;
+  const existing = contentInjectionInFlight.get(tabId);
+  if (existing) return existing;
+  const injection = chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] })
+    .then(() => { injectedContentTabs.add(tabId); })
+    .finally(() => { contentInjectionInFlight.delete(tabId); });
+  contentInjectionInFlight.set(tabId, injection);
+  return injection;
+}
+
 async function inspectTab(tabId: number): Promise<ContentInspection> {
   try {
     return await chrome.tabs.sendMessage(tabId, { type: 'X_INSPECT' });
   } catch {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+    await ensureContentScript(tabId);
     return await chrome.tabs.sendMessage(tabId, { type: 'X_INSPECT' });
   }
 }
@@ -192,26 +213,31 @@ async function advanceSession(): Promise<void> {
 }
 
 async function extractBank(bankUrl: string): Promise<AppState> {
-  const tab = await chrome.tabs.create({ url: bankUrl, active: false });
-  if (!tab.id) throw new Error('BANK_TAB_CREATE_FAILED');
-  await waitForTabLoad(tab.id);
-  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => ({
-    anchors: Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).map((a) => ({ raw: a.href, label: a.textContent?.trim() || undefined })),
-    markup: document.documentElement.outerHTML
-  }) });
-  await chrome.tabs.remove(tab.id);
-  const extraction = extractLinksFromValues([
-    ...((result as { anchors?: Array<{ raw: string; label?: string }> } | undefined)?.anchors ?? []),
-    { raw: (result as { markup?: string } | undefined)?.markup ?? '' }
-  ]);
-  const queue: QueueItem[] = [];
-  for (const extracted of extraction.links) {
-    queue.push({ id: crypto.randomUUID(), sourceBankUrl: bankUrl, targetUrl: extracted.url, label: extracted.label, position: queue.length + 1, status: 'PENDING', attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
+  let bankTabId: number | undefined;
+  try {
+    const tab = await chrome.tabs.create({ url: bankUrl, active: false });
+    bankTabId = tab.id;
+    if (!bankTabId) throw new Error('BANK_TAB_CREATE_FAILED');
+    await waitForTabLoad(bankTabId);
+    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: bankTabId }, func: () => ({
+      anchors: Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).map((a) => ({ raw: a.href, label: a.textContent?.trim() || undefined })),
+      markup: document.documentElement.outerHTML
+    }) });
+    const extraction = extractLinksFromValues([
+      ...((result as { anchors?: Array<{ raw: string; label?: string }> } | undefined)?.anchors ?? []),
+      { raw: (result as { markup?: string } | undefined)?.markup ?? '' }
+    ]);
+    const queue: QueueItem[] = [];
+    for (const extracted of extraction.links) {
+      queue.push({ id: crypto.randomUUID(), sourceBankUrl: bankUrl, targetUrl: extracted.url, label: extracted.label, position: queue.length + 1, status: 'PENDING', attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
+    }
+    const nextState = await updateState((state) => ({ ...state, queue, session: { ...state.session, id: crypto.randomUUID(), bankUrl, status: 'IDLE', currentIndex: 0, total: queue.length, intervalMinutes: defaultSettings.intervalMinutes, maxRetries: defaultSettings.maxRetries, failureBehavior: defaultSettings.failureBehavior, confirmBeforeStart: defaultSettings.confirmBeforeStart, keepAutomationTabOpen: defaultSettings.keepAutomationTabOpen, closeTabOnComplete: defaultSettings.closeTabOnComplete, version: 1, updatedAt: Date.now() } }));
+    await broadcast(nextState);
+    console.info('Extracted bank', { total: queue.length, duplicateCount: extraction.duplicateCount, invalidCount: extraction.invalidCount });
+    return nextState;
+  } finally {
+    if (bankTabId) await chrome.tabs.remove(bankTabId).catch(() => undefined);
   }
-  const nextState = await updateState((state) => ({ ...state, queue, session: { ...state.session, id: crypto.randomUUID(), bankUrl, status: 'IDLE', currentIndex: 0, total: queue.length, intervalMinutes: defaultSettings.intervalMinutes, maxRetries: defaultSettings.maxRetries, failureBehavior: defaultSettings.failureBehavior, confirmBeforeStart: defaultSettings.confirmBeforeStart, keepAutomationTabOpen: defaultSettings.keepAutomationTabOpen, closeTabOnComplete: defaultSettings.closeTabOnComplete, version: 1, updatedAt: Date.now() } }));
-  await broadcast(nextState);
-  console.info('Extracted bank', { total: queue.length, duplicateCount: extraction.duplicateCount, invalidCount: extraction.invalidCount });
-  return nextState;
 }
 
 async function handleMessage(message: RuntimeMessage): Promise<unknown> {
