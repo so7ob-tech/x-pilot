@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.4] - 2026-09-20
+
+### Fixed
+
+- Polls for the X composer and enabled Post button for a bounded period before failing.
+- Adds additional stable accessibility and test-id strategies for X publish controls.
+- Advances to the next pending item after retries are exhausted when failure behavior is Continue.
+- Marks the session Completed when the exhausted failure was the last remaining item.
+
 ## [0.1.3] - 2026-09-20
 
 ### Changed

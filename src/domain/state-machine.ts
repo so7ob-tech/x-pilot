@@ -1,4 +1,4 @@
-import type { QueueItemStatus, SessionStatus } from './models';
+import type { QueueItem, QueueItemStatus, SessionStatus } from './models';
 
 export function canStartItem(status: QueueItemStatus): boolean {
   return status === 'PENDING' || status === 'FAILED';
@@ -6,6 +6,12 @@ export function canStartItem(status: QueueItemStatus): boolean {
 
 export function isTerminalItem(status: QueueItemStatus): boolean {
   return status === 'PUBLISHED' || status === 'PUBLISHED_UNVERIFIED' || status === 'SKIPPED';
+}
+
+export function getNextPendingItem(queue: QueueItem[], excludedItemId?: string): QueueItem | undefined {
+  return [...queue]
+    .filter((item) => item.id !== excludedItemId && item.status === 'PENDING')
+    .sort((left, right) => left.position - right.position)[0];
 }
 
 export function nextSessionStatus(current: SessionStatus, command: 'START' | 'PAUSE' | 'RESUME' | 'STOP' | 'WAIT' | 'COMPLETE'): SessionStatus {
