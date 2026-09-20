@@ -14,20 +14,14 @@ const composerSelectors = [
   'textarea[placeholder*="منشور"]'
 ];
 
-const postButtonSelectors = [
-  '[data-testid="tweetButtonInline"]',
-  '[data-testid="tweetButton"]',
-  'button[data-testid*="tweetButton"]',
-  'button[aria-label="Post"]',
-  'button[aria-label="Tweet"]',
-  'button[aria-label="نشر"]',
-  'button[aria-label="غرد"]'
-];
+const publishTestIdPattern = /(?:tweet|post|publish).*button|button.*(?:tweet|post|publish)/iu;
+const excludedLabelPattern = /(?:إضافة|الكل|رد|reply|add|cancel|إلغاء)/iu;
+const publishLabelPattern = /^(?:نشر|نشر\s+المنشور|إرسال|post|tweet|publish|send)$/iu;
 
 function findFirst(selectors: string[]): HTMLElement | null {
   for (const selector of selectors) {
     const element = document.querySelector<HTMLElement>(selector);
-    if (element) return element;
+    if (element && isVisibleControl(element)) return element;
   }
   return null;
 }
@@ -36,18 +30,54 @@ function readText(element: HTMLElement): string {
   return (element instanceof HTMLTextAreaElement ? element.value : element.innerText || element.textContent || '').trim();
 }
 
+export function normalizeControlLabel(value: string): string {
+  return value
+    .normalize('NFKC')
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/gu, '')
+    .replace(/\u0640/gu, '')
+    .replace(/[\u200B-\u200D\uFEFF]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .toLocaleLowerCase();
+}
+
 export function isPublishButtonLabel(value: string): boolean {
-  const label = value.replace(/\s+/gu, ' ').trim().toLocaleLowerCase();
-  return ['post', 'tweet', 'نشر', 'غرد'].includes(label);
+  const label = normalizeControlLabel(value);
+  return Boolean(label) && !excludedLabelPattern.test(label) && publishLabelPattern.test(label);
+}
+
+function isVisibleControl(element: HTMLElement): boolean {
+  if (!element.isConnected || element.hidden || element.getAttribute('aria-hidden') === 'true') return false;
+  const style = window.getComputedStyle(element);
+  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+  const rect = element.getBoundingClientRect();
+  return rect.width === 0 && rect.height === 0 ? element.getClientRects().length > 0 : true;
+}
+
+function isEnabledControl(element: HTMLElement): boolean {
+  return !element.hasAttribute('disabled') && element.getAttribute('aria-disabled') !== 'true';
+}
+
+function controlMetadata(element: HTMLElement): string {
+  return [
+    readText(element),
+    element.getAttribute('aria-label') ?? '',
+    element.getAttribute('title') ?? '',
+    element.getAttribute('data-testid') ?? ''
+  ].filter(Boolean).join(' ');
+}
+
+function isPublishControl(element: HTMLElement): boolean {
+  if (!isVisibleControl(element) || !isEnabledControl(element)) return false;
+  const testId = element.getAttribute('data-testid') ?? '';
+  if (publishTestIdPattern.test(testId) && !excludedLabelPattern.test(normalizeControlLabel(controlMetadata(element)))) return true;
+  return isPublishButtonLabel(readText(element)) || isPublishButtonLabel(element.getAttribute('aria-label') ?? '') || isPublishButtonLabel(element.getAttribute('title') ?? '');
 }
 
 function findPostButton(): HTMLElement | null {
-  const selected = findFirst(postButtonSelectors);
-  if (selected && isPublishButtonLabel(readText(selected) || selected.getAttribute('aria-label') || '')) return selected;
-  return Array.from(document.querySelectorAll<HTMLElement>('button,[role="button"]')).find((button) => {
-    const label = readText(button) || button.getAttribute('aria-label') || '';
-    return isPublishButtonLabel(label);
-  }) ?? null;
+  const selected = findFirst(['[data-testid="tweetButtonInline"]', '[data-testid="tweetButton"]', 'button[data-testid*="tweetButton"]', 'button[aria-label="Post"]', 'button[aria-label="Tweet"]', 'button[aria-label="نشر"]', 'button[aria-label="غرد"]']);
+  if (selected && isPublishControl(selected)) return selected;
+  return Array.from(document.querySelectorAll<HTMLElement>('button,[role="button"],[data-testid*="tweetButton"],[data-testid*="postButton"]')).find(isPublishControl) ?? null;
 }
 
 export function inspect(): ContentInspection {
@@ -55,7 +85,7 @@ export function inspect(): ContentInspection {
   if (!['x.com', 'twitter.com', 'www.x.com', 'www.twitter.com'].includes(host)) {
     return { ok: false, pageKind: 'UNKNOWN', composerFound: false, contentPresent: false, postButtonFound: false, postButtonEnabled: false, reason: 'WRONG_HOST' };
   }
-  const body = document.body?.innerText?.toLowerCase() ?? '';
+  const body = document.body?.innerText?.toLocaleLowerCase() ?? '';
   if (location.pathname.startsWith('/i/flow/login') || body.includes('log in to x') || body.includes('تسجيل الدخول')) {
     return { ok: false, pageKind: 'LOGIN', composerFound: false, contentPresent: false, postButtonFound: false, postButtonEnabled: false, reason: 'NOT_LOGGED_IN' };
   }
@@ -65,7 +95,7 @@ export function inspect(): ContentInspection {
   const composer = findFirst(composerSelectors);
   const postButton = findPostButton();
   const contentPresent = composer ? readText(composer).length > 0 : false;
-  const postButtonEnabled = Boolean(postButton && !postButton.hasAttribute('disabled') && postButton.getAttribute('aria-disabled') !== 'true');
+  const postButtonEnabled = Boolean(postButton && isEnabledControl(postButton));
   const ok = Boolean(composer && contentPresent && postButton && postButtonEnabled);
   return { ok, pageKind: 'X', composerFound: Boolean(composer), contentPresent, postButtonFound: Boolean(postButton), postButtonEnabled, reason: ok ? undefined : 'PUBLISH_CONTROLS_NOT_READY' };
 }
