@@ -14,6 +14,11 @@ export function getNextPendingItem(queue: QueueItem[], excludedItemId?: string):
     .sort((left, right) => left.position - right.position)[0];
 }
 
+export function getNextRunnableItem(queue: QueueItem[], currentItemId?: string): QueueItem | undefined {
+  const current = currentItemId ? queue.find((item) => item.id === currentItemId) : undefined;
+  return current && canStartItem(current.status) ? current : getNextPendingItem(queue, currentItemId);
+}
+
 export function nextSessionStatus(current: SessionStatus, command: 'START' | 'PAUSE' | 'RESUME' | 'STOP' | 'WAIT' | 'COMPLETE'): SessionStatus {
   if (command === 'START' || command === 'RESUME') return 'RUNNING';
   if (command === 'PAUSE') return 'PAUSED';
