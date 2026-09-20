@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.3] - Unreleased
+
+### Fixed
+
+- Activates the automation tab before waiting for X's dynamically rendered composer and publish controls.
+- Handles tabs that are already complete without waiting indefinitely for a missed update event.
+- Restores the user's previously active tab after publish, failure, or interruption.
+
 ## [0.3.2] - Unreleased
 
 ### Fixed
