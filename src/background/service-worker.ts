@@ -106,13 +106,15 @@ async function processCurrentItem(): Promise<void> {
     const exhausted = !latestItem || latestItem.attempts >= session.maxRetries + 1;
     const failedStatus = exhausted ? 'FAILED' : 'PENDING';
     const nextItem = exhausted && session.failureBehavior === 'CONTINUE' ? getNextPendingItem(current.queue, item.id) : undefined;
-    const nextStatus = exhausted && session.failureBehavior === 'PAUSE' ? 'PAUSED' : nextItem ? 'RUNNING' : exhausted ? 'COMPLETED' : 'RUNNING';
+    const nextRunAt = nextItem ? Date.now() + session.intervalMinutes * 60_000 : undefined;
+    const nextStatus = exhausted && session.failureBehavior === 'PAUSE' ? 'PAUSED' : nextItem ? 'WAITING' : exhausted ? 'COMPLETED' : 'RUNNING';
     const failedState = await updateState((currentState) => ({
       ...currentState,
       queue: currentState.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: failedStatus, lastError: message, operationId: undefined, updatedAt: Date.now() } : candidate),
-      session: currentState.session ? { ...currentState.session, status: nextStatus, currentItemId: nextItem?.id, currentIndex: nextItem?.position ?? currentState.session.currentIndex, completedAt: nextStatus === 'COMPLETED' ? Date.now() : currentState.session.completedAt, updatedAt: Date.now() } : null,
+      session: currentState.session ? { ...currentState.session, status: nextStatus, currentItemId: nextItem?.id, currentIndex: nextItem?.position ?? currentState.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? Date.now() : currentState.session.completedAt, updatedAt: Date.now() } : null,
       history: [...currentState.history, { id: crypto.randomUUID(), queueItemId: item.id, link: item.targetUrl, timestamp: Date.now(), attemptNumber: item.attempts + 1, action: 'PUBLISH', result: failedStatus, error: message }]
     }));
+    if (nextRunAt) await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
     await broadcast(failedState);
     if (nextStatus === 'RUNNING') await processCurrentItem();
   }
