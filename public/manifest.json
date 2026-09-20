@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "X Queue Publisher",
-  "version": "0.1.2",
-  "description": "إدارة محلية لقائمة روابط تجهيز منشورات X مع جدولة واستمرارية.",
+  "name": "X-Pilot",
+  "version": "0.1.3",
+  "description": "X-Pilot: إدارة محلية لقائمة روابط تجهيز منشورات X مع جدولة واستمرارية.",
   "minimum_chrome_version": "114",
   "permissions": ["storage", "alarms", "tabs", "scripting", "sidePanel", "activeTab"],
   "host_permissions": ["https://x.com/*", "https://twitter.com/*"],

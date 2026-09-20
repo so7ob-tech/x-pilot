@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3] - 2026-09-20
+
+### Changed
+
+- Renamed the Chrome extension display name and package identity to X-Pilot.
+- Renamed the GitHub repository to `x-pilot`.
+
 ## [0.1.2] - 2026-09-20
 
 ### Release
