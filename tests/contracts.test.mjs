@@ -27,7 +27,7 @@ test('manifest declares the persistent workflow APIs', () => {
 });
 
 test('failed Continue path schedules the next item and its countdown alarm', () => {
-  assert.match(serviceWorker, /const nextRunAt = nextItem \? Date\.now\(\) \+ session\.intervalMinutes/);
+  assert.match(serviceWorker, /const nextRunAt = !exhausted \|\| nextItem \? Date\.now\(\) \+ session\.intervalMinutes/);
   assert.match(serviceWorker, /nextItem \? 'WAITING'/);
   assert.match(serviceWorker, /if \(nextRunAt\) await chrome\.alarms\.create/);
 });
@@ -43,4 +43,18 @@ test('startup and install listeners both invoke persisted-state recovery', () =>
   assert.match(serviceWorker, /chrome\.runtime\.onStartup\.addListener\(\(\) => \{ void recoverPersistedState\(\); \}\)/);
   assert.match(serviceWorker, /chrome\.runtime\.onInstalled\.addListener\(\(\) => \{[\s\S]*void recoverPersistedState\(\); \}\)/);
   assert.match(serviceWorker, /await chrome\.alarms\.clear\(ALARM_NAME\)/);
+});
+
+test('successful publish persists the next item before scheduling the wait', () => {
+  assert.match(serviceWorker, /const nextItem = getNextPendingItem\(\(await getState\(\)\)\.queue, item\.id\)/);
+  assert.match(serviceWorker, /currentItemId: nextItem\?\.id/);
+  assert.match(serviceWorker, /const nextStatus = nextItem \? 'WAITING' : 'COMPLETED'/);
+  assert.match(serviceWorker, /await chrome\.alarms\.clear\(ALARM_NAME\);\n    if \(nextRunAt\)/);
+});
+
+test('non-exhausted failures schedule a retry instead of recursively retrying', () => {
+  assert.match(serviceWorker, /const nextRunAt = !exhausted \|\| nextItem \?/);
+  assert.match(serviceWorker, /const nextStatus = exhausted && session\.failureBehavior === 'PAUSE' \? 'PAUSED' : nextItem \|\| !exhausted \? 'WAITING' : 'COMPLETED'/);
+  assert.match(serviceWorker, /const nextItemId = nextItem\?\.id \?\? \(!exhausted \? item\.id : undefined\)/);
+  assert.doesNotMatch(serviceWorker, /if \(nextStatus === 'RUNNING'\) await processCurrentItem\(\)/);
 });

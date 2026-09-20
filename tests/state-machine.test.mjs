@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getNextPendingItem, nextSessionStatus } from '../src/domain/state-machine.ts';
+import { getNextPendingItem, getNextRunnableItem, nextSessionStatus } from '../src/domain/state-machine.ts';
 
 const item = (id, position, status) => ({ id, position, status, sourceBankUrl: 'https://bank.example', targetUrl: `https://x.com/intent/post?text=${id}`, attempts: 0, createdAt: 1, updatedAt: 1 });
 
@@ -12,6 +12,16 @@ test('selects the next pending item after an exhausted failure', () => {
 test('does not select terminal or failed items as the next item', () => {
   const queue = [item('failed', 1, 'FAILED'), item('published', 2, 'PUBLISHED'), item('skipped', 3, 'SKIPPED')];
   assert.equal(getNextPendingItem(queue, 'failed'), undefined);
+});
+
+test('prefers the persisted current item when it is runnable', () => {
+  const queue = [item('first', 1, 'PUBLISHED'), item('current', 2, 'PENDING'), item('later', 3, 'PENDING')];
+  assert.equal(getNextRunnableItem(queue, 'current')?.id, 'current');
+});
+
+test('falls back to the next pending item when the persisted item is stale', () => {
+  const queue = [item('published', 1, 'PUBLISHED'), item('next', 2, 'PENDING')];
+  assert.equal(getNextRunnableItem(queue, 'published')?.id, 'next');
 });
 
 test('maps Pause and Resume to persisted session states', () => {
