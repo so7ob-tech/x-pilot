@@ -1,6 +1,6 @@
 import type { AppState, AutomationSession, ContentInspection, QueueItem, RuntimeMessage, Settings } from '../domain/models';
 import { defaultSettings } from '../domain/models';
-import { canStartItem, isTerminalItem } from '../domain/state-machine';
+import { canStartItem, getNextPendingItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
 import { addAttempt, getSettings, getState, saveQueue, saveSession, saveSettings, updateState } from '../storage/storage-repository';
 
@@ -48,6 +48,20 @@ async function inspectTab(tabId: number): Promise<ContentInspection> {
   }
 }
 
+async function waitForPublishReady(tabId: number, timeoutMs = 25000, intervalMs = 500): Promise<ContentInspection> {
+  const deadline = Date.now() + timeoutMs;
+  let lastInspection: ContentInspection | undefined;
+  while (Date.now() < deadline) {
+    lastInspection = await inspectTab(tabId);
+    if (lastInspection.ok) return lastInspection;
+    if (lastInspection.pageKind === 'LOGIN' || lastInspection.pageKind === 'CHALLENGE' || lastInspection.pageKind === 'UNKNOWN') {
+      throw new Error(lastInspection.reason ?? 'PUBLISH_CONTROLS_NOT_READY');
+    }
+    await wait(intervalMs);
+  }
+  throw new Error(lastInspection?.reason ?? 'PUBLISH_CONTROLS_NOT_READY');
+}
+
 async function processCurrentItem(): Promise<void> {
   const state = await getState();
   const session = state.session;
@@ -64,8 +78,7 @@ async function processCurrentItem(): Promise<void> {
   try {
     await chrome.tabs.update(tabId, { url: item.targetUrl, active: false });
     await waitForTabLoad(tabId);
-    const inspection = await inspectTab(tabId);
-    if (!inspection.ok) throw new Error(inspection.reason ?? 'PUBLISH_CONTROLS_NOT_READY');
+    await waitForPublishReady(tabId);
     await updateState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'READY', updatedAt: Date.now() } : candidate) }));
     const lockedState = await getState();
     const lockedItem = lockedState.queue.find((candidate) => candidate.id === item.id);
@@ -92,15 +105,16 @@ async function processCurrentItem(): Promise<void> {
     const latestItem = current.queue.find((candidate) => candidate.id === item.id);
     const exhausted = !latestItem || latestItem.attempts >= session.maxRetries + 1;
     const failedStatus = exhausted ? 'FAILED' : 'PENDING';
-    const nextStatus = exhausted && session.failureBehavior === 'PAUSE' ? 'PAUSED' : 'RUNNING';
+    const nextItem = exhausted && session.failureBehavior === 'CONTINUE' ? getNextPendingItem(current.queue, item.id) : undefined;
+    const nextStatus = exhausted && session.failureBehavior === 'PAUSE' ? 'PAUSED' : nextItem ? 'RUNNING' : exhausted ? 'COMPLETED' : 'RUNNING';
     const failedState = await updateState((currentState) => ({
       ...currentState,
       queue: currentState.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: failedStatus, lastError: message, operationId: undefined, updatedAt: Date.now() } : candidate),
-      session: currentState.session ? { ...currentState.session, status: nextStatus, updatedAt: Date.now() } : null,
+      session: currentState.session ? { ...currentState.session, status: nextStatus, currentItemId: nextItem?.id, currentIndex: nextItem?.position ?? currentState.session.currentIndex, completedAt: nextStatus === 'COMPLETED' ? Date.now() : currentState.session.completedAt, updatedAt: Date.now() } : null,
       history: [...currentState.history, { id: crypto.randomUUID(), queueItemId: item.id, link: item.targetUrl, timestamp: Date.now(), attemptNumber: item.attempts + 1, action: 'PUBLISH', result: failedStatus, error: message }]
     }));
     await broadcast(failedState);
-    if (!exhausted && nextStatus === 'RUNNING') await processCurrentItem();
+    if (nextStatus === 'RUNNING') await processCurrentItem();
   }
 }
 

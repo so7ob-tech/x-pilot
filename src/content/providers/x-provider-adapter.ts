@@ -3,14 +3,20 @@ import type { ContentInspection } from '../../domain/models';
 const composerSelectors = [
   '[data-testid="tweetTextarea_0"]',
   '[contenteditable="true"][role="textbox"]',
+  'div[role="textbox"][contenteditable="true"]',
+  '[data-testid="tweetTextarea_0"] [contenteditable="true"]',
   'textarea[aria-label*="Post"]',
-  'textarea[aria-label*="Tweet"]'
+  'textarea[aria-label*="Tweet"]',
+  'textarea[placeholder*="Post"]',
+  'textarea[placeholder*="Tweet"]'
 ];
 
 const postButtonSelectors = [
   '[data-testid="tweetButtonInline"]',
   '[data-testid="tweetButton"]',
-  'button[data-testid*="tweetButton"]'
+  'button[data-testid*="tweetButton"]',
+  'button[aria-label="Post"]',
+  'button[aria-label="Tweet"]'
 ];
 
 function findFirst(selectors: string[]): HTMLElement | null {
