@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "X Queue Publisher",
+  "version": "0.1.0",
+  "description": "إدارة محلية لقائمة روابط تجهيز منشورات X مع جدولة واستمرارية.",
+  "minimum_chrome_version": "114",
+  "permissions": ["storage", "alarms", "tabs", "scripting", "sidePanel", "activeTab"],
+  "host_permissions": ["https://x.com/*", "https://twitter.com/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "فتح قائمة X" },
+  "side_panel": { "default_path": "index.html" },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
