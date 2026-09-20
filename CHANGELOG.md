@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.6] - 2026-09-20
+
+### Fixed
+
+- Detects Arabic X composer and publish controls, including `نص المنشور` and `نشر`.
+- Avoids confusing `إضافة منشور` and `نشر الكل` thread controls with the single-post action.
+- Schedules the next queue item after an exhausted failure and restarts its persisted countdown.
+
 ## [0.1.5] - 2026-09-20
 
 ### Added
