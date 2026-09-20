@@ -1,5 +1,6 @@
 import type { AppState, AutomationSession, ContentInspection, QueueItem, RuntimeMessage, Settings } from '../domain/models';
 import { defaultSettings } from '../domain/models';
+import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
 import { addAttempt, getSettings, getState, saveQueue, saveSession, saveSettings, updateState } from '../storage/storage-repository';
@@ -11,6 +12,19 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function broadcast(state?: AppState) {
   const snapshot = state ?? await getState();
   await chrome.runtime.sendMessage({ type: 'STATE_UPDATED', state: snapshot }).catch(() => undefined);
+}
+
+async function recoverPersistedState(): Promise<AppState> {
+  const current = await getState();
+  const recovered = normalizeRecovery(current);
+  const changed = JSON.stringify(recovered) !== JSON.stringify(current);
+  const state = changed ? await updateState(() => recovered) : current;
+  await chrome.alarms.clear(ALARM_NAME);
+  if (hasFutureRecoveryAlarm(state)) {
+    await chrome.alarms.create(ALARM_NAME, { when: state.session!.nextRunAt!, persistAcrossSessions: true });
+  }
+  await broadcast(state);
+  return state;
 }
 
 async function getOrCreateAutomationTab(session: AutomationSession): Promise<number> {
@@ -222,5 +236,5 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => { handleMessage(message).then(sendResponse).catch((error) => sendResponse({ error: error instanceof Error ? error.message : 'UNKNOWN_ERROR' })); return true; });
 chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === ALARM_NAME) void advanceSession(); });
-chrome.runtime.onStartup.addListener(async () => { const state = await getState(); if (state.session?.status === 'WAITING' && state.session.nextRunAt) await chrome.alarms.create(ALARM_NAME, { when: state.session.nextRunAt, persistAcrossSessions: true }); });
-chrome.runtime.onInstalled.addListener(() => { void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); });
+chrome.runtime.onStartup.addListener(() => { void recoverPersistedState(); });
+chrome.runtime.onInstalled.addListener(() => { void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); void recoverPersistedState(); });
