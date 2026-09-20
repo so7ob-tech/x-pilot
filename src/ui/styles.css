@@ -43,4 +43,5 @@ button.danger { color: #a42020; }
 .countdown { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: #fff7df; color: #745100; }
 .countdown span { font-size: 12px; }
 .countdown strong { direction: ltr; font-variant-numeric: tabular-nums; font-size: 22px; letter-spacing: .05em; }
+.paused-hint { margin: 12px 0 0; padding: 9px 11px; border-radius: 10px; color: #745100; background: #fff7df; font-size: 12px; }
 footer { margin: 16px 2px 6px; }
