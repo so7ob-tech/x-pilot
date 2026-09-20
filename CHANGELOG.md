@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.5] - Unreleased
+
+### Fixed
+
+- Prevents repeated Content Script injection per tab and removes injection state when tabs navigate or close.
+- Adds a page-level guard so duplicate Content Script executions cannot register duplicate runtime listeners.
+- Guarantees temporary bank-tab removal in `finally`, including extraction and scripting failures.
+
 ## [0.3.4] - Unreleased
 
 ### Fixed
