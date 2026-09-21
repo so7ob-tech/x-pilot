@@ -4,11 +4,12 @@ import type { AppMetaState, AppState, BankDiffItem, BankDiffResult, BackupEnvelo
 import { defaultSettings } from '../domain/models';
 import { getTweetPreview } from '../extraction/tweet-preview';
 import { emptySearchFilters, filterBanks, filterHistory, filterQueue, filterSessions, type SearchFilters, workspaceStatesToSearchData } from '../domain/search-filters';
+import { calculateGlobalAnalytics, calculateWorkspaceAnalytics, type GlobalAnalytics, type WorkspaceAnalytics } from '../domain/analytics';
 import './styles.css';
 
 const initialState: AppState = { queue: [], session: null, history: [] };
 const initialRuntimeStatus: RuntimeStatus = { engineStatus: 'IDLE', connection: 'NOT_REQUIRED', checkedAt: 0 };
-type TabId = 'operation' | 'tests' | 'queue' | 'sessions' | 'history' | 'workspaces' | 'settings';
+type TabId = 'operation' | 'tests' | 'queue' | 'sessions' | 'history' | 'analytics' | 'workspaces' | 'settings';
 
 function send(message: RuntimeMessage): Promise<any> { return chrome.runtime.sendMessage(message); }
 
@@ -36,6 +37,7 @@ function App() {
   const [sessionFilters, setSessionFilters] = useState<SearchFilters>(emptySearchFilters);
   const [historyFilters, setHistoryFilters] = useState<SearchFilters>(emptySearchFilters);
   const [selectedQueueIds, setSelectedQueueIds] = useState<string[]>([]);
+  const [analyticsWorkspaceId, setAnalyticsWorkspaceId] = useState('*');
   const [scheduleAt, setScheduleAt] = useState('');
   const [windowsText, setWindowsText] = useState('[]');
   const session = state.session;
@@ -129,6 +131,10 @@ function App() {
   const visibleBanks = filterBanks(searchData.banks.length ? searchData.banks : banks, scoped(bankFilters));
   const visibleSessions = filterSessions(searchData.sessions.length ? searchData.sessions : sessionHistory, scoped(sessionFilters));
   const visibleHistory = filterHistory(searchData.history, scoped(historyFilters));
+  const globalAnalytics = calculateGlobalAnalytics(workspaceStates);
+  const selectedAnalytics = analyticsWorkspaceId === '*' ? undefined : workspaceStates.find((workspaceState) => workspaceState.workspaceId === analyticsWorkspaceId);
+  const workspaceAnalytics = selectedAnalytics ? calculateWorkspaceAnalytics(selectedAnalytics) : undefined;
+  const allWorkspaceAnalytics = workspaceStates.map(calculateWorkspaceAnalytics);
 
   return <main className="shell">
     <header className="brand-header"><div className="brand-lockup"><img className="brand-logo" src={logoUrl} alt="X-Pilot" /><div><span className="eyebrow">LOCAL-FIRST · MV3</span><h1>قائمة نشر X</h1></div></div><span className={`status status-${session?.status ?? 'IDLE'}`}>{session?.status ?? 'IDLE'}</span></header>
@@ -139,6 +145,7 @@ function App() {
       <TabButton id="queue" activeTab={activeTab} onSelect={setActiveTab} icon="☷" label="بنك التغريدات" />
       <TabButton id="sessions" activeTab={activeTab} onSelect={setActiveTab} icon="◷" label="الجلسات" />
       <TabButton id="history" activeTab={activeTab} onSelect={setActiveTab} icon="◷" label="السجل" />
+      <TabButton id="analytics" activeTab={activeTab} onSelect={setActiveTab} icon="▥" label="التحليلات" />
       <TabButton id="workspaces" activeTab={activeTab} onSelect={setActiveTab} icon="▦" label="مساحات العمل" />
       <TabButton id="settings" activeTab={activeTab} onSelect={setActiveTab} icon="⚙" label="الإعدادات" />
     </div><div className="runtime-indicators" aria-live="polite"><StatusIndicator kind="connection" value={runtimeStatus.connection} label={connectionLabel(runtimeStatus.connection)} /><StatusIndicator kind="engine" value={runtimeStatus.engineStatus} label={engineLabel(runtimeStatus.engineStatus)} /></div></nav>
@@ -175,6 +182,8 @@ function App() {
       <section className="card history-list">{visibleHistory.map((attempt) => <article className="history-row" key={attempt.id}><div><strong>{new Date(attempt.timestamp).toLocaleString('ar')}</strong><small>{attempt.result} · {attempt.action} · Item {attempt.queueItemId}</small>{attempt.error && <small className="error-text">{attempt.error}</small>}</div><a className="primary-link" href={attempt.link} target="_blank" rel="noreferrer">فتح</a></article>)}{!visibleHistory.length && <p className="muted">لا توجد محاولات مطابقة للبحث الحالي.</p>}</section>
     </section>}
 
+    {activeTab === 'analytics' && <AnalyticsDashboard global={globalAnalytics} workspace={workspaceAnalytics} workspaceRows={allWorkspaceAnalytics} workspaces={workspaces} selectedWorkspaceId={analyticsWorkspaceId} onWorkspaceChange={setAnalyticsWorkspaceId} />}
+
     {activeTab === 'workspaces' && <section className="tab-panel" role="tabpanel" aria-label="مساحات العمل">
       <section className="card"><div className="section-heading"><div><span className="eyebrow">PROJECTS</span><h2>كل مساحات العمل</h2></div><button className="primary" onClick={() => void createNewWorkspace()}>+ Workspace جديدة</button></div><p className="muted">المساحة النشطة: {activeWorkspace?.name ?? 'غير محددة'}{meta?.automationWorkspaceId ? ` · قيد التشغيل: ${workspaces.find((workspace) => workspace.id === meta.automationWorkspaceId)?.name ?? 'Workspace أخرى'}` : ''}</p></section>
       <div className="workspace-list">{workspaces.map((workspace) => <WorkspaceCard key={workspace.id} workspace={workspace} active={workspace.id === meta?.activeWorkspaceId} running={workspace.id === meta?.automationWorkspaceId} onOpen={() => void switchWorkspace(workspace.id)} onArchive={() => void archive(workspace.id)} onRestore={() => void restore(workspace.id)} onDelete={() => void remove(workspace)} />)}</div>
@@ -197,6 +206,15 @@ function SearchToolbar({ filters, onChange, workspaces, banks = [], sessionOptio
   const update = (patch: Partial<SearchFilters>) => onChange({ ...filters, ...patch });
   return <div className="search-toolbar"><input className="search-input" value={filters.query} onChange={(event) => update({ query: event.target.value })} placeholder="بحث..." aria-label="بحث" /><div className="search-filters">{showStatus && <select value={filters.status} onChange={(event) => update({ status: event.target.value as SearchFilters['status'] })} aria-label="فلترة حسب الحالة"><option value="ALL">كل الحالات</option><option value="PENDING">Pending</option><option value="PUBLISHED">Published</option><option value="FAILED">Failed</option><option value="SKIPPED">Skipped</option></select>}{banks.length > 0 && <select value={filters.bankId} onChange={(event) => update({ bankId: event.target.value })} aria-label="فلترة حسب البنك"><option value="">كل البنوك</option>{banks.map((bank) => <option key={bank.id} value={bank.id}>{bank.name}</option>)}</select>}{sessionOptions.length > 0 && <select value={filters.sessionId} onChange={(event) => update({ sessionId: event.target.value })} aria-label="فلترة حسب الجلسة"><option value="">كل الجلسات</option>{sessionOptions.map((session) => <option key={session.id} value={session.id}>{session.id.slice(0, 8)} · {session.status}</option>)}</select>}<select value={filters.workspaceId || '*'} onChange={(event) => update({ workspaceId: event.target.value === '*' ? '' : event.target.value })} aria-label="فلترة حسب Workspace"><option value="*">كل Workspaces</option>{workspaces.filter((workspace) => !workspace.archived).map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select><input type="date" value={filters.dateFrom} onChange={(event) => update({ dateFrom: event.target.value })} aria-label="من تاريخ" /><input type="date" value={filters.dateTo} onChange={(event) => update({ dateTo: event.target.value })} aria-label="إلى تاريخ" /><button onClick={() => onChange(emptySearchFilters)}>مسح الفلاتر</button></div></div>;
 }
+
+function AnalyticsDashboard({ global, workspace, workspaceRows, workspaces, selectedWorkspaceId, onWorkspaceChange }: { global: GlobalAnalytics; workspace?: WorkspaceAnalytics; workspaceRows: WorkspaceAnalytics[]; workspaces: Workspace[]; selectedWorkspaceId: string; onWorkspaceChange: (value: string) => void }) {
+  const formatDuration = (milliseconds: number) => { if (!milliseconds) return '—'; const minutes = Math.round(milliseconds / 60000); return minutes < 60 ? `${minutes} د` : `${Math.floor(minutes / 60)} س ${minutes % 60} د`; };
+  const latest = workspace?.lastActivityAt ? new Date(workspace.lastActivityAt).toLocaleString('ar') : '—';
+  const maxSessions = Math.max(1, ...global.sessionsOverTime.map((point) => point.sessions));
+  return <section className="tab-panel analytics-panel" role="tabpanel" aria-label="التحليلات"><section className="card"><div className="section-heading"><div><span className="eyebrow">ANALYTICS DASHBOARD</span><h2>لوحة التحليلات</h2></div><select value={selectedWorkspaceId} onChange={(event) => onWorkspaceChange(event.target.value)} aria-label="نطاق التحليلات"><option value="*">كل X-Pilot</option>{workspaces.filter((item) => !item.archived).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><p className="muted">الحسابات مشتقة مباشرة من Sessions وHistory وQueue ولا يتم تخزين إحصاءات مكررة.</p></section>{workspace ? <><div className="analytics-grid"><Metric label="Total sessions" value={workspace.totalSessions} /><Metric label="Total posts" value={workspace.totalPosts} /><Metric label="Published" value={workspace.published} /><Metric label="Failed" value={workspace.failed} /><Metric label="Skipped" value={workspace.skipped} /><Metric label="Success Rate" value={`${workspace.successRate}%`} /><Metric label="Average attempts" value={workspace.averageAttempts || '—'} /><Metric label="Average session duration" value={formatDuration(workspace.averageSessionDurationMs)} /></div><section className="card analytics-detail"><div><strong>Most active bank</strong><span>{workspace.mostActiveBank ? `${workspace.mostActiveBank.name} · ${workspace.mostActiveBank.activity} عناصر` : '—'}</span></div><div><strong>Last activity</strong><span>{latest}</span></div></section></> : <><div className="analytics-grid"><Metric label="Total Workspaces" value={global.totalWorkspaces} /><Metric label="Total published" value={global.totalPublished} /><Metric label="Total failures" value={global.totalFailures} /><Metric label="Sessions over time" value={global.sessionsOverTime.reduce((sum, point) => sum + point.sessions, 0)} /></div><section className="card"><h3>مقارنة Workspaces</h3><div className="analytics-table">{workspaceRows.map((row) => <button key={row.workspaceId} className="analytics-table-row" onClick={() => onWorkspaceChange(row.workspaceId)}><strong>{row.workspaceName}</strong><span>{row.published} منشور</span><span>{row.failed} فشل</span><span>{row.successRate}% نجاح</span></button>)}{!workspaceRows.length && <p className="muted">لا توجد بيانات Analytics بعد.</p>}</div></section></>}<section className="card"><h3>Sessions over time</h3><div className="sessions-chart">{global.sessionsOverTime.map((point) => <div className="sessions-bar" key={point.date} title={`${point.date}: ${point.sessions}`}><span style={{ height: `${Math.max(8, (point.sessions / maxSessions) * 100)}%` }}></span><small>{point.date.slice(5)}</small></div>)}{!global.sessionsOverTime.length && <p className="muted">لا توجد جلسات مسجلة بعد.</p>}</div></section></section>;
+}
+
+function Metric({ label, value }: { label: string; value: string | number }) { return <div className="analytics-metric"><span>{label}</span><strong>{value}</strong></div>; }
 
 function StatusIndicator({ kind, value, label }: { kind: 'connection' | 'engine'; value: string; label: string }) { return <span className={`live-indicator ${kind}-indicator ${kind}-${value}`}><span className="live-dot" aria-hidden="true" />{label}</span>; }
 function connectionLabel(value: RuntimeStatus['connection']): string { return value === 'CONNECTED' ? 'متصل' : value === 'DISCONNECTED' ? 'غير متصل' : 'غير مطلوب'; }
