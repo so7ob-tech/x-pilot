@@ -1,6 +1,7 @@
 import type { AppMetaState, AppMetadata, AppState, AutomationSession, AutomationSessionRecord, AutomationSessionRuntime, BackupEnvelope, BackupSummary, BackupValidation, GlobalSettings, HistoricalSession, LegacyPublishAttempt, PublishAttempt, QueueItem, Settings, TweetBank, Workspace, WorkspaceSettings, WorkspaceState } from '../domain/models';
 import { CURRENT_SCHEMA_VERSION, getMigrationPath, validateMigrationRegistry } from './migrations.ts';
 import { timedStorageOperation } from './storage-performance.ts';
+import { normalizeWorkspaceState } from '../domain/data-integrity.ts';
 
 const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false, duplicatePolicy: 'BLOCK', publishingWindows: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', notificationsEnabled: true, badgeMode: 'COUNT' };
 
@@ -149,14 +150,13 @@ export async function getWorkspaceState(workspaceId: string): Promise<WorkspaceS
       const effective = { ...meta.globalSettings, ...(local?.overrides ?? {}) };
       const runtime = result[V4_RUNTIME_KEY] as AutomationSessionRuntime | undefined;
       const attempts = (result[v4AttemptsKey(workspaceId)] as PublishAttempt[] | undefined) ?? [];
-      return { workspaceId, workspace, banks: ((result[v4BankKey(workspaceId)] as TweetBank[] | undefined) ?? []).map((bank) => ({ ...bank, favorite: bank.favorite ?? false, archived: bank.archived ?? false })), queue: ((result[v4QueueKey(workspaceId)] as QueueItem[] | undefined) ?? []).map((item) => ({ ...item, workspaceId })), session: runtime?.workspaceId === workspaceId ? sessionFromRuntime(runtime, effective) : null, history: attempts.map((attempt) => ({ id: attempt.id, workspaceId, sessionId: attempt.sessionId, queueItemId: attempt.queueItemId, link: attempt.targetUrl ?? attempt.link ?? '', timestamp: attempt.timestamp, attemptNumber: attempt.attemptNumber, action: attempt.action, result: attempt.result, error: attempt.errorMessage ?? attempt.error })), historicalSessions: ((result[v4SessionsKey(workspaceId)] as AutomationSessionRecord[] | undefined) ?? []) };
+      return normalizeWorkspaceState({ workspace, banks: ((result[v4BankKey(workspaceId)] as TweetBank[] | undefined) ?? []).map((bank) => ({ ...bank, favorite: bank.favorite ?? false, archived: bank.archived ?? false })), queue: ((result[v4QueueKey(workspaceId)] as QueueItem[] | undefined) ?? []).map((item) => ({ ...item, workspaceId })), session: runtime?.workspaceId === workspaceId ? sessionFromRuntime(runtime, effective) : null, history: attempts.map((attempt) => ({ id: attempt.id, workspaceId, sessionId: attempt.sessionId, queueItemId: attempt.queueItemId, link: attempt.targetUrl ?? attempt.link ?? '', timestamp: attempt.timestamp, attemptNumber: attempt.attemptNumber, action: attempt.action, result: attempt.result, error: attempt.errorMessage ?? attempt.error })), historicalSessions: ((result[v4SessionsKey(workspaceId)] as AutomationSessionRecord[] | undefined) ?? []) }, workspaceId, workspace);
     }
   }
   const result = await chrome.storage.local.get(workspaceKey(workspaceId));
   const stored = result[workspaceKey(workspaceId)] as WorkspaceState | undefined;
   if (stored) {
-    const normalized = { ...stored, banks: stored.banks.map((bank) => ({ ...bank, favorite: bank.favorite ?? false, archived: bank.archived ?? false })), historicalSessions: stored.historicalSessions ?? [] };
-    return normalized;
+    return normalizeWorkspaceState(stored, workspaceId, stored.workspace);
   }
   const workspace = createWorkspaceRecord('مساحة عمل جديدة');
   const fallback = createWorkspaceState({ ...workspace, id: workspaceId }, meta.globalSettings);
@@ -260,6 +260,12 @@ export async function deleteBank(workspaceId: string, bankId: string, confirmed:
   const state = await getWorkspaceState(workspaceId);
   if (state.session && ['RUNNING', 'WAITING', 'PAUSED'].includes(state.session.status) && (state.session.bankId === bankId || state.queue.some((item) => item.sourceBankId === bankId))) throw new Error('CANNOT_DELETE_RUNNING_BANK');
   if (!state.banks.some((bank) => bank.id === bankId)) throw new Error('BANK_NOT_FOUND');
+  const referencedByQueue = state.queue.some((item) => item.sourceBankId === bankId);
+  const referencedBySessionHistory = state.historicalSessions.some((session) => session.bankId === bankId);
+  if (referencedByQueue || referencedBySessionHistory) {
+    await archiveBank(workspaceId, bankId);
+    return;
+  }
   await updateWorkspaceState(workspaceId, (current) => ({ ...current, banks: current.banks.filter((bank) => bank.id !== bankId) }));
 }
 
@@ -287,9 +293,11 @@ export async function deleteWorkspace(workspaceId: string, confirmed: boolean): 
   const meta = await getMeta();
   if (meta.workspaceOrder.length <= 1) throw new Error('CANNOT_DELETE_LAST_WORKSPACE');
   if (meta.automationWorkspaceId === workspaceId) throw new Error('CANNOT_DELETE_RUNNING_WORKSPACE');
-  await chrome.storage.local.remove(workspaceKey(workspaceId));
-  const order = meta.workspaceOrder.filter((id) => id !== workspaceId);
-  const next = { ...meta, workspaceOrder: order, activeWorkspaceId: meta.activeWorkspaceId === workspaceId ? order[0] : meta.activeWorkspaceId };
+  const state = await getWorkspaceState(workspaceId);
+  // Deletion is a tombstone operation: Queue, Attempts, and Session Records remain recoverable.
+  await saveWorkspaceState({ ...state, workspace: { ...state.workspace, archived: true, updatedAt: Date.now(), lastActivityAt: Date.now() } });
+  const replacement = (await listWorkspaces(false)).find((workspace) => workspace.id !== workspaceId);
+  const next = { ...meta, activeWorkspaceId: meta.activeWorkspaceId === workspaceId && replacement ? replacement.id : meta.activeWorkspaceId };
   await saveMeta(next);
   return next;
 }
