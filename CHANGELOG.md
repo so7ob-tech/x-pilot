@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.19.5] - Patch
+
+### Fixed
+
+- Preflight now opens the first runnable Queue item URL instead of only opening X Home.
+- The check follows the Dry Run sequence: navigate, wait for load, activate the tab, inject Content Script if needed, and run `X_INSPECT`.
+- The temporary inspection tab is restored and closed in `finally`; no Post action or Queue mutation occurs.
+- Composer and Post Button readiness is now validated on the actual item Composer.
+
 ## [0.19.4] - Patch
 
 ### Fixed
