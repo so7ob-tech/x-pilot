@@ -39,7 +39,7 @@ test('UI exposes both Dry Run modes and stop control', () => {
   assert.match(ui, /DRY_RUN_FIRST/);
   assert.match(ui, /DRY_RUN_QUEUE/);
   assert.match(ui, /DRY_RUN_STOP/);
-  assert.match(ui, /Test First Item/);
-  assert.match(ui, /Test Entire Queue/);
-  assert.match(ui, /تعذر بدء Dry Run/);
+  assert.match(ui, /tests\.testFirst/);
+  assert.match(ui, /tests\.testQueue/);
+  assert.match(ui, /تعذر بدء الاختبار/);
 });
