@@ -417,7 +417,7 @@ test('Duplicate Protection exposes SHA-256 fingerprints and policy controls', ()
   assert.match(models, /duplicatePolicy: DuplicatePolicy/);
   assert.match(serviceWorker, /fingerprintTweet/);
   assert.match(serviceWorker, /fingerprintIndex/);
-  assert.match(uiSource, /سياسة التكرار/);
+  assert.match(uiSource, /settings\.duplicatePolicy/);
   assert.match(uiSource, /سبق نشر هذا المحتوى/);
   assert.match(uiSource, /محتوى مكرر/);
 });

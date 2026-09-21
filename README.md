@@ -40,6 +40,7 @@
 - في v0.24.0 يدعم تبويب Queue Pagination بخيارات 10 و50 و100 أو عرض كل العناصر، مع بقاء البحث والفلاتر والإجراءات الجماعية متوافقة.
 - في v0.24.1 تظهر رسالة الحد اليومي للمستخدم بالعربية بدل الرمز التقني `X_DAILY_POST_LIMIT_REACHED`.
 - في v0.25.0 أصبحت الواجهة ثنائية اللغة: العربية والإنجليزية، مع اختيار تلقائي حسب لغة المتصفح وحفظ محلي للتفضيل، وتبديل اتجاه الواجهة بين RTL وLTR.
+- في v0.25.1 استُكملت ترجمة عناصر Settings وQueue وبنوك التغريدات والجلسات والسجل ومساحات العمل.
 - Data Architecture v4 تفصل Runtime التشغيلي عن Session Records وPublish Attempts والإعدادات، مع Migration آمن من schema v3 وBackup format v2.
 - يستخدم التخزين مفاتيح منطقية منفصلة داخل `chrome.storage.local`، مع سجل Migrations صريح وقياس أداء مؤقت لا يحفظ محتوى التغريدات أو الروابط.
 - يتضمن Data Integrity guards لحالات حذف Bank أو Workspace، Restart أثناء النشر أو WAITING، Alarms قديمة، Sessions قديمة، Queue Items منشورة، Duplicate Fingerprints، Records تالفة، وحقول ناقصة.
