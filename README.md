@@ -1,6 +1,6 @@
 # X-Pilot
 
-> **v0.25.8:** تم تنفيذ حزمة P0 لسلامة الأتمتة والبيانات: منع إعادة النشر غير المؤكد، قفل START، معالجة أخطاء Alarm، Restore transactional، واستعادة الجلسات المجدولة بعد Restart.
+> **v1.0.0:** إصدار مستقر يضيف مصالحة فورية لحالة Workspace، نطاقات ACTIVE/ALL/SPECIFIC، حماية من الاستجابات القديمة، وتجديد Lease أثناء START.
 
 <p align="center">
   <img src="public/branding/x-pilot-logo.png" alt="X-Pilot logo" width="180" />
