@@ -138,6 +138,16 @@ test('Scheduled Alarm creates a session when Queue has no prior session and repo
   assert.match(serviceWorker, /handleScheduledStart/);
 });
 
+test('Preflight automatically opens X and inspects readiness without publishing', () => {
+  assert.match(serviceWorker, /async function performPreflight/);
+  assert.match(serviceWorker, /chrome\.tabs\.create\(\{ url: 'https:\/\/x\.com\/home', active: false \}\)/);
+  assert.match(serviceWorker, /await waitForTabLoad\(temporary\.id\)/);
+  assert.match(serviceWorker, /xInspection = await inspectTab\(xTab\.id\)/);
+  assert.match(serviceWorker, /finally \{\s*if \(temporaryTabId !== undefined\) await chrome\.tabs\.remove/);
+  assert.match(uiSource, /اضغط فحص الآن؛ سيقوم X-Pilot بفتح تبويب X تلقائيًا/);
+  assert.match(uiSource, /className="preflight-icon"/);
+});
+
 test('Feature 13 exposes shared advanced search filters across all entity views', () => {
   assert.match(uiSource, /SearchToolbar/);
   assert.match(uiSource, /label="الجلسات"/);

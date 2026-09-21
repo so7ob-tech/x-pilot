@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.19.2] - Patch
+
+### Fixed
+
+- Preflight now automatically reuses an X tab or opens a temporary `https://x.com/home` tab and runs `X_INSPECT` before reporting readiness.
+- Temporary Preflight tabs are removed in `finally` and no Post action is executed.
+- Preflight results now render as compact adjacent status cards, with a single column fallback on narrow panels.
+- Removed the misleading instruction asking the user to open X manually.
+
 ## [0.19.1] - Patch
 
 ### Fixed

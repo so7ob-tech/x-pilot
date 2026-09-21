@@ -248,13 +248,18 @@ button.danger:hover, .ui-button-danger:hover { border-color: #df9c99; }
 
 .preflight-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px; border-radius: var(--radius-sm); background: var(--color-surface-2); }
 .preflight-summary span { color: var(--color-text-2); font-size: 11px; }
-.preflight-checks { display: grid; gap: 6px; margin-top: 10px; }
-.preflight-check { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 12px; }
-.preflight-check div { display: grid; gap: 2px; }
+.preflight-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 10px; }
+.preflight-check { display: flex; min-width: 0; gap: 8px; align-items: flex-start; padding: 9px 10px; border: 1px solid transparent; border-radius: var(--radius-md); font-size: 11px; }
+.preflight-check div { display: grid; min-width: 0; gap: 3px; }
+.preflight-check strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preflight-icon { display: grid; flex: 0 0 21px; place-items: center; width: 21px; height: 21px; border-radius: 50%; font-weight: 900; }
 .preflight-check small { color: var(--color-text-2); }
-.preflight-pass { color: var(--color-success); background: var(--color-success-bg); }
-.preflight-warn { color: var(--color-warning); background: var(--color-warning-bg); }
-.preflight-fail { color: var(--color-danger); background: var(--color-danger-bg); }
+.preflight-pass { color: var(--color-success); border-color: #acd9bd; background: var(--color-success-bg); }
+.preflight-pass .preflight-icon { background: #ccebd7; }
+.preflight-warn { color: var(--color-warning); border-color: #e5ca83; background: var(--color-warning-bg); }
+.preflight-warn .preflight-icon { background: #ffe9a9; }
+.preflight-fail { color: var(--color-danger); border-color: #e3aaa6; background: var(--color-danger-bg); }
+.preflight-fail .preflight-icon { background: #f8d1ce; }
 .preflight-ready { border-color: #acd9bd; }
 .preflight-blocked { border-color: #e3aaa6; }
 .recovery-card { border-color: #c4d8f1; background: var(--color-surface-2); }
@@ -278,6 +283,7 @@ footer { margin: 18px 2px 6px; }
   .stats b, .metric-card strong { font-size: 17px; }
   .analytics-grid { grid-template-columns: repeat(2, 1fr); }
   .diagnostics-meta { grid-template-columns: repeat(2, 1fr); }
+  .preflight-checks { grid-template-columns: 1fr; }
   .analytics-detail { grid-template-columns: 1fr; }
   .bank-row { align-items: stretch; flex-direction: column; }
   .bank-row button { width: 100%; }
