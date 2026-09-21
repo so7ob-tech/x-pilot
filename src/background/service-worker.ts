@@ -1,6 +1,7 @@
 import type { AppState, AutomationSession, BankDiffResult, BankSnapshotItem, ContentInspection, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
 import { createHistoricalSession, defaultSettings } from '../domain/models';
 import { classifyBankDiff, mergeSelectedDiffItems } from '../domain/bank-diff';
+import { fingerprintTweet } from '../domain/content-fingerprint';
 import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
@@ -353,8 +354,21 @@ async function refreshBank(workspaceId: string, bankId: string): Promise<BankDif
       ...((result as { anchors?: Array<{ raw: string; label?: string }> } | undefined)?.anchors ?? []),
       { raw: (result as { markup?: string } | undefined)?.markup ?? '' },
     ]);
-    const snapshot: BankSnapshotItem[] = [...extraction.links, ...extraction.invalidLinks].map((item) => ({ url: item.url, label: item.label }));
-    const diff = classifyBankDiff(workspaceId, bank, snapshot, state.queue);
+    const snapshot: BankSnapshotItem[] = [];
+    for (const item of [...extraction.links, ...extraction.invalidLinks]) {
+      const fingerprint = await fingerprintTweet(item.url, item.label);
+      snapshot.push({ url: item.url, label: item.label, contentFingerprint: fingerprint?.fingerprint, normalizedContent: fingerprint?.content });
+    }
+    const fingerprintIndex = new Map<string, { item: QueueItem; workspaceId: string }>();
+    for (const workspace of await listWorkspaces(true)) {
+      const candidateState = await getWorkspaceState(workspace.id);
+      for (const item of candidateState.queue) {
+        const fingerprint = item.contentFingerprint ? { fingerprint: item.contentFingerprint } : await fingerprintTweet(item.targetUrl, item.label);
+        if (fingerprint) fingerprintIndex.set(fingerprint.fingerprint, { item, workspaceId: workspace.id });
+      }
+    }
+    const settings = await getSettings();
+    const diff = classifyBankDiff(workspaceId, bank, snapshot, state.queue, Date.now(), fingerprintIndex, settings.duplicatePolicy);
     bankDiffs.set(`${workspaceId}:${bankId}`, diff);
     await updateWorkspaceState(workspaceId, (current) => ({ ...current, banks: current.banks.map((item) => item.id === bankId ? { ...item, lastSnapshot: snapshot, lastSnapshotAt: diff.refreshedAt, lastExtractedAt: diff.refreshedAt, lastExtractedCount: snapshot.length, updatedAt: diff.refreshedAt } : item) }));
     return diff;
@@ -429,7 +443,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       const workspaceState = await getWorkspaceState(workspaceId);
       const bank = workspaceState.banks.find((candidate) => candidate.id === message.bankId);
       if (!bank) throw new Error('BANK_NOT_FOUND');
-      const queue = mergeSelectedDiffItems(workspaceState.queue, diff, bank, message.itemIds);
+      const queue = mergeSelectedDiffItems(workspaceState.queue, diff, bank, message.itemIds, Date.now(), (await getSettings()).duplicatePolicy);
       const saved = await updateWorkspaceState(workspaceId, (current) => ({ ...current, queue, session: current.session ? { ...current.session, total: queue.length, updatedAt: Date.now() } : current.session }));
       bankDiffs.delete(`${workspaceId}:${message.bankId}`);
       const nextState: AppState = { workspaceId: saved.workspaceId, queue: saved.queue, session: saved.session, history: saved.history };
