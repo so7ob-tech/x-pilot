@@ -60,3 +60,11 @@ test('operation dashboard owns the scheduled and waiting timer display', () => {
   assert.match(hero, /formatCountdown\(countdownSeconds\)/);
   assert.doesNotMatch(controls, /dashboard-countdown|formatCountdown\(countdownSeconds\)/);
 });
+
+test('navigation uses horizontal icon-label tabs and shared compact shell spacing', () => {
+  assert.match(css, /\.tabs \{ display: flex; flex-wrap: wrap;/);
+  assert.match(css, /\.tab-button \{[^}]*flex-direction: row;/);
+  assert.match(css, /\.shell \{ width: min\(100%, 760px\); margin: 0 auto; padding: 10px 12px 20px;/);
+  assert.match(css, /\.card, \.ui-card \{ margin-bottom: 9px; padding: 14px;/);
+  assert.doesNotMatch(css, /\.tabs \{[^}]*grid-template-columns/);
+});
