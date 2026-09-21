@@ -33,6 +33,7 @@
 - Bulk Queue Actions لتحديد عدة عناصر وتنفيذ Delete وSkip وRetry وReset to Pending والتحريك والتعيين والتصدير، مع حماية العنصر الجاري.
 - Analytics Dashboard لعرض مؤشرات كل Workspace ومؤشرات X-Pilot العامة مشتقة مباشرة من Sessions وHistory دون تخزين مكرر.
 - Diagnostics Center لفحص الإصدار والتخزين والـAlarm والتبويب وX Login وComposer وPost Button والصلاحيات باستخدام فحص قراءة فقط دون نشر.
+- في v0.22.0 فُصلت تبويبات التشغيل واختبارات البدء والتحليلات والتشخيص إلى ملفات مستقلة، ووُحّدت ترويسة التطبيق، مع Workspace switcher مختصر يعرض اسم المساحة بجوار زر الإدارة دون عداد العناصر أو الرمز `◈`.
 - Data Architecture v4 تفصل Runtime التشغيلي عن Session Records وPublish Attempts والإعدادات، مع Migration آمن من schema v3 وBackup format v2.
 - يستخدم التخزين مفاتيح منطقية منفصلة داخل `chrome.storage.local`، مع سجل Migrations صريح وقياس أداء مؤقت لا يحفظ محتوى التغريدات أو الروابط.
 - يتضمن Data Integrity guards لحالات حذف Bank أو Workspace، Restart أثناء النشر أو WAITING، Alarms قديمة، Sessions قديمة، Queue Items منشورة، Duplicate Fingerprints، Records تالفة، وحقول ناقصة.

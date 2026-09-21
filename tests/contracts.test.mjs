@@ -8,7 +8,16 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public/manifest.json'), 'utf8'));
 const serviceWorker = fs.readFileSync(path.join(root, 'src/background/service-worker.ts'), 'utf8');
 const contentEntry = fs.readFileSync(path.join(root, 'src/content/content-entry.ts'), 'utf8');
-const uiSource = fs.readFileSync(path.join(root, 'src/ui/main.tsx'), 'utf8');
+const uiSource = [
+  'src/ui/main.tsx',
+  'src/ui/types/navigation.ts',
+  'src/ui/services/runtime-client.ts',
+  'src/ui/components/operation-cards.tsx',
+  'src/ui/tabs/OperationTab.tsx',
+  'src/ui/tabs/StartupTestsTab.tsx',
+  'src/ui/tabs/AnalyticsTab.tsx',
+  'src/ui/tabs/DiagnosticsTab.tsx',
+].map((file) => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const models = fs.readFileSync(path.join(root, 'src/domain/models.ts'), 'utf8');
 const storage = fs.readFileSync(path.join(root, 'src/storage/storage-repository.ts'), 'utf8');
@@ -62,7 +71,7 @@ test('Side Panel exposes operation, startup-tests, tweet-bank, sessions, history
 });
 
 test('operation tab includes current-tweet information and existing controls', () => {
-  assert.match(uiSource, /function CurrentTweetCard/);
+  assert.match(uiSource, /export function CurrentTweetCard/);
   assert.match(uiSource, /التغريدة الحالية/);
   assert.match(uiSource, /getTweetPreview\(item\.targetUrl, item\.label, 180\)/);
   assert.match(uiSource, /aria-label="التشغيل"/);
@@ -128,7 +137,7 @@ test('Dry Run results show item number and preview without exposing target URLs'
   assert.match(serviceWorker, /position: item\.position/);
   assert.match(uiSource, /Item #\{item\.position\}/);
   assert.match(uiSource, /getDryRunPreview\(item\.targetUrl\)/);
-  assert.doesNotMatch(uiSource.slice(uiSource.indexOf('function DryRunCard'), uiSource.indexOf('function CurrentTweetCard')), /item\.targetUrl\}\/span>/);
+  assert.doesNotMatch(uiSource.slice(uiSource.indexOf('export function DryRunCard'), uiSource.indexOf('export function CurrentTweetCard')), /item\.targetUrl\}\/span>/);
 });
 
 test('Scheduled Alarm creates a session when Queue has no prior session and reports empty Queue', () => {
@@ -202,7 +211,7 @@ test('Start creates a session when missing and automation-tab failure cannot lea
 });
 
 test('Feature 15 exposes derived Workspace and global Analytics Dashboard metrics', () => {
-  assert.match(uiSource, /AnalyticsDashboard/);
+  assert.match(uiSource, /AnalyticsTab/);
   assert.match(uiSource, /Total sessions/);
   assert.match(uiSource, /Success Rate/);
   assert.match(uiSource, /Average session duration/);
