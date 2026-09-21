@@ -128,7 +128,11 @@ button.danger:hover, .ui-button-danger:hover { border-color: #df9c99; }
 .connection-DISCONNECTED .live-dot, .engine-FAILED .live-dot { background: var(--color-danger); box-shadow: 0 0 0 3px #b33a3a1c; }
 .engine-WAITING .live-dot, .engine-PAUSED .live-dot { background: var(--color-warning); box-shadow: 0 0 0 3px #9868141c; }
 .runtime-warning, .notice { margin-bottom: 13px; padding: 10px 12px; border-radius: var(--radius-md); color: var(--color-warning); background: var(--color-warning-bg); font-size: 12px; }
-.notice { border: 1px solid #efd998; color: var(--color-text-2); background: var(--color-surface); }
+.notice { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #cbdcf2; color: var(--color-text-2); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.notice-info { border-color: #b9d4f1; background: #f4f9ff; }
+.notice-error { border-color: #e3aaa6; color: var(--color-danger); background: var(--color-danger-bg); }
+.notice-dismiss { flex: 0 0 24px; width: 24px; min-height: 24px; padding: 0; border: 0; color: currentColor; background: transparent; font-size: 18px; line-height: 1; }
+.notice-dismiss:hover { border: 0; color: currentColor; background: transparent; box-shadow: none; }
 .running-workspace { width: 100%; margin-bottom: 13px; justify-content: flex-start; color: var(--color-primary); border-color: #c3d8f5; background: #edf5ff; }
 .tab-panel { min-height: 220px; }
 
