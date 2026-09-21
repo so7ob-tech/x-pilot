@@ -50,14 +50,15 @@ test('UI and README use the official X-Pilot branding asset', () => {
   assert.match(readme, /public\/icons/);
 });
 
-test('Side Panel exposes operation, startup-tests, tweet-bank, sessions, history, and settings tabs', () => {
-  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'workspaces' \| 'settings'/);
+test('Side Panel exposes operation, startup-tests, tweet-bank, sessions, history, analytics, and settings tabs', () => {
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /aria-label="حالة X-Pilot والتبويبات"/);
   assert.match(uiSource, /label="التشغيل"/);
   assert.match(uiSource, /label="بنك التغريدات"/);
   assert.match(uiSource, /label="الإعدادات"/);
   assert.match(uiSource, /useState<TabId>\('operation'\)/);
   assert.match(uiSource, /label="اختبارات البدء"/);
+  assert.match(uiSource, /label="التحليلات"/);
 });
 
 test('operation tab includes current-tweet information and existing controls', () => {
@@ -167,6 +168,19 @@ test('Feature 14 exposes all Bulk Queue actions with active-item protection', ()
   assert.match(uiSource, /Move to bottom/);
   assert.match(uiSource, /Assign Bank/);
   assert.match(uiSource, /Export selected/);
+});
+
+test('Feature 15 exposes derived Workspace and global Analytics Dashboard metrics', () => {
+  assert.match(uiSource, /AnalyticsDashboard/);
+  assert.match(uiSource, /Total sessions/);
+  assert.match(uiSource, /Success Rate/);
+  assert.match(uiSource, /Average session duration/);
+  assert.match(uiSource, /Most active bank/);
+  assert.match(uiSource, /Total Workspaces/);
+  assert.match(uiSource, /Sessions over time/);
+  assert.match(uiSource, /ولا يتم تخزين إحصاءات مكررة/);
+  assert.match(uiSource, /calculateGlobalAnalytics/);
+  assert.match(uiSource, /calculateWorkspaceAnalytics/);
 });
 
 test('tab bar renders accessible live connection and engine indicators', () => {
@@ -289,7 +303,7 @@ test('Workspace runtime operations expose explicit ownership and management APIs
   assert.match(serviceWorker, /await claimAutomationOwner\(message\.workspaceId \?\? meta\.activeWorkspaceId\)/);
   assert.match(serviceWorker, /GET_WORKSPACES/);
   assert.match(serviceWorker, /SET_ACTIVE_WORKSPACE/);
-  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'workspaces' \| 'settings'/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /function WorkspaceCard/);
 });
 
