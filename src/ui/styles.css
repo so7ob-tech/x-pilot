@@ -33,7 +33,7 @@ button.danger { color: #a42020; }
 .workspace-switcher select { flex: 1; min-width: 0; border: 1px solid #cbd6e3; border-radius: 9px; padding: 9px 10px; background: #fff; font: inherit; }
 .workspace-switcher .eyebrow { align-self: center; }
 .workspace-switcher button { padding: 8px 9px; font-size: 11px; }
-.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 5px; background: #e8eef7; border-radius: 13px; }
+.tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 5px; background: #e8eef7; border-radius: 13px; }
 .tab-button { border: 0; background: transparent; color: #5f7087; padding: 10px 8px; font-size: 12px; font-weight: 800; }
 .tab-button span { margin-left: 5px; }
 .tab-button.active { color: #145dcc; background: #fff; box-shadow: 0 2px 9px #193a5b18; }
@@ -75,6 +75,11 @@ button.danger { color: #a42020; }
 .countdown span { font-size: 12px; }
 .countdown strong { direction: ltr; font-variant-numeric: tabular-nums; font-size: 22px; letter-spacing: .05em; }
 .queue { display: grid; gap: 8px; }
+.history-list { display: grid; gap: 8px; }
+.history-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #edf1f6; }
+.history-row:last-child { border-bottom: 0; }
+.history-row small { display: block; margin-top: 3px; color: #6b7b91; }
+.history-counts { display: flex; gap: 8px; color: #53667e; font-size: 11px; white-space: nowrap; }
 .queue-row { align-items: flex-start; border-top: 1px solid #edf1f6; padding-top: 9px; }
 .position { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; background: #eef4fb; color: #3b587a; border-radius: 50%; font-size: 12px; }
 .item-main { min-width: 0; flex: 1; }
