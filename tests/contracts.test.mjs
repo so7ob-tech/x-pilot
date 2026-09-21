@@ -251,3 +251,11 @@ test('Duplicate Protection exposes SHA-256 fingerprints and policy controls', ()
   assert.match(uiSource, /سبق نشر هذا المحتوى/);
   assert.match(uiSource, /محتوى مكرر/);
 });
+
+test('Preflight Check exposes structured checks and guards Start', () => {
+  assert.match(models, /PREFLIGHT_CHECK/);
+  assert.match(serviceWorker, /performPreflight/);
+  assert.match(serviceWorker, /PREFLIGHT_FAILED/);
+  assert.match(uiSource, /PREFLIGHT CHECK/);
+  assert.match(uiSource, /فحص الآن/);
+});

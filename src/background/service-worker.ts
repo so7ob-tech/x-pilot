@@ -2,6 +2,7 @@ import type { AppState, AutomationSession, BankDiffResult, BankSnapshotItem, Con
 import { createHistoricalSession, defaultSettings } from '../domain/models';
 import { classifyBankDiff, mergeSelectedDiffItems } from '../domain/bank-diff';
 import { fingerprintTweet } from '../domain/content-fingerprint';
+import { runPreflight } from '../domain/preflight';
 import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
@@ -377,6 +378,19 @@ async function refreshBank(workspaceId: string, bankId: string): Promise<BankDif
   }
 }
 
+async function performPreflight(workspaceId: string) {
+  const state = await getWorkspaceState(workspaceId);
+  const meta = await getMeta();
+  const workspace = (await listWorkspaces(true)).find((item) => item.id === workspaceId);
+  const settings = await getSettings();
+  const permissionsGranted = await chrome.permissions.contains({ origins: ['https://x.com/*', 'https://twitter.com/*'] }).catch(() => false);
+  let xInspection: ContentInspection | null = null;
+  const candidateTabs = await chrome.tabs.query({ lastFocusedWindow: true });
+  const xTab = candidateTabs.find((tab) => /^https:\/\/(?:www\.)?(?:x|twitter)\.com\//i.test(tab.url ?? ''));
+  if (xTab?.id) xInspection = await inspectTab(xTab.id).catch(() => null);
+  return runPreflight({ workspace, queue: state.queue, banks: state.banks, automationWorkspaceId: meta.automationWorkspaceId, alarmsAvailable: Boolean(chrome.alarms), permissionsGranted, settings, xInspection });
+}
+
 async function handleMessage(message: RuntimeMessage): Promise<unknown> {
   switch (message.type) {
     case 'GET_STATE': return getActiveState();
@@ -413,6 +427,10 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     case 'GET_SESSION_HISTORY': {
       const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
       return { workspaceId, sessions: await getHistoricalSessions(workspaceId) };
+    }
+    case 'PREFLIGHT_CHECK': {
+      const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
+      return performPreflight(workspaceId);
     }
     case 'CREATE_WORKSPACE': return createWorkspace(message.name, message.description, message.color, message.icon);
     case 'UPDATE_WORKSPACE': return updateWorkspace(message.workspaceId, message.patch);
@@ -458,6 +476,8 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     case 'UPDATE_SETTINGS': await saveSettings(message.settings); return updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, ...message.settings, updatedAt: Date.now() } : state.session }));
     case 'START': {
       const meta = await getMeta();
+      const preflight = await performPreflight(message.workspaceId ?? meta.activeWorkspaceId);
+      if (!preflight.ready) throw new Error(`PREFLIGHT_FAILED:${preflight.summary}`);
       await claimAutomationOwner(message.workspaceId ?? meta.activeWorkspaceId);
       const settings = await getSettings();
       const state = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, ...settings, status: 'RUNNING', startedAt: current.session.startedAt ?? Date.now(), currentItemId: current.session.currentItemId ?? current.queue.find((item) => item.status === 'PENDING')?.id, updatedAt: Date.now() } : null }));
