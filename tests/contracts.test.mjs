@@ -147,7 +147,7 @@ test('content-entry installs only one runtime message listener per page', () => 
 });
 
 test('bank extraction always removes its temporary tab in finally', () => {
-  assert.match(serviceWorker, /async function extractBank\(bankUrl: string, workspaceId: string\)/);
+  assert.match(serviceWorker, /async function extractBank\(bankUrl: string, workspaceId: string, mode: 'REPLACE' \| 'APPEND'/);
   assert.match(serviceWorker, /let bankTabId: number \| undefined/);
   assert.match(serviceWorker, /finally \{[\s\S]*if \(bankTabId\) await chrome\.tabs\.remove\(bankTabId\)\.catch/);
 });
@@ -201,4 +201,13 @@ test('Workspace runtime operations expose explicit ownership and management APIs
   assert.match(serviceWorker, /SET_ACTIVE_WORKSPACE/);
   assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /function WorkspaceCard/);
+});
+
+test('Workspace extraction does not silently overwrite Queue data', () => {
+  assert.match(serviceWorker, /QUEUE_REPLACE_WHILE_ACTIVE/);
+  assert.match(serviceWorker, /QUEUE_REPLACE_HAS_EXECUTED_ITEMS/);
+  assert.match(serviceWorker, /existingUrls/);
+  assert.match(uiSource, /إضافة روابط جديدة فقط/);
+  assert.match(uiSource, /تحتوي Queue على عناصر منشورة/);
+  assert.match(uiSource, /onRestore/);
 });

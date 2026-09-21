@@ -14,6 +14,7 @@ function send(message: RuntimeMessage): Promise<any> { return chrome.runtime.sen
 function App() {
   const [state, setState] = useState<AppState>(initialState);
   const [bankUrl, setBankUrl] = useState('');
+  const [extractMode, setExtractMode] = useState<'REPLACE' | 'APPEND'>('REPLACE');
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [notice, setNotice] = useState('');
   const [nowMs, setNowMs] = useState(Date.now());
@@ -48,7 +49,8 @@ function App() {
     const originPattern = `${parsed.protocol}//${parsed.host}/*`;
     const granted = await chrome.permissions.request({ origins: [originPattern] });
     if (!granted) return setNotice('لم يتم منح صلاحية قراءة نطاق بنك التغريدات');
-    const result = await send({ type: 'EXTRACT_BANK', bankUrl: bankUrl.trim(), workspaceId: meta?.activeWorkspaceId });
+    if (extractMode === 'REPLACE' && state.queue.some((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED') && !window.confirm('تحتوي Queue على عناصر منشورة. الاستبدال سيترك العناصر المنشورة محفوظة في السجل لكنه سيزيلها من Queue الحالية. هل تريد المتابعة؟')) return;
+    const result = await send({ type: 'EXTRACT_BANK', bankUrl: bankUrl.trim(), workspaceId: meta?.activeWorkspaceId, mode: extractMode });
     if (result?.error) return setNotice(`فشل الاستخراج: ${result.error}`);
     if (result?.queue) setState(result);
     setNotice(`تم العثور على ${result?.queue?.length ?? 0} رابطًا`);
@@ -58,6 +60,7 @@ function App() {
   const switchWorkspace = async (workspaceId: string) => { const result = await send({ type: 'SET_ACTIVE_WORKSPACE', workspaceId }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); await refresh(); setActiveTab('operation'); };
   const createNewWorkspace = async () => { const name = window.prompt('اسم Workspace الجديدة؟'); if (!name?.trim()) return; const result = await send({ type: 'CREATE_WORKSPACE', name: name.trim() }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); };
   const archive = async (workspaceId: string) => { const result = await send({ type: 'ARCHIVE_WORKSPACE', workspaceId }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); await refresh(); };
+  const restore = async (workspaceId: string) => { const result = await send({ type: 'RESTORE_WORKSPACE', workspaceId }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); };
   const remove = async (workspace: Workspace) => { if (!window.confirm(`سيتم حذف Workspace "${workspace.name}" وبياناتها المحلية. هل تريد المتابعة؟`)) return; const result = await send({ type: 'DELETE_WORKSPACE', workspaceId: workspace.id, confirmed: true }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); await refresh(); };
 
   return <main className="shell">
@@ -81,13 +84,13 @@ function App() {
     </section>}
 
     {activeTab === 'queue' && <section className="tab-panel" role="tabpanel" aria-label="بنك التغريدات وقائمة Queue">
-      <section className="card"><h2>بنك التغريدات</h2><div className="row bank-row"><input value={bankUrl} onChange={(event) => setBankUrl(event.target.value)} placeholder="https://example.com/tweet-bank" dir="ltr" /><button onClick={() => void extract()}>استخراج الروابط</button></div><p className="muted">سيتم فتح البنك محليًا واستخراج روابط X وTwitter الفريدة حسب ترتيب ظهورها.</p></section>
+      <section className="card"><h2>بنك التغريدات</h2><div className="row bank-row"><input value={bankUrl} onChange={(event) => setBankUrl(event.target.value)} placeholder="https://example.com/tweet-bank" dir="ltr" /><button onClick={() => void extract()}>استخراج الروابط</button></div><div className="extract-options"><label><input type="radio" checked={extractMode === 'REPLACE'} onChange={() => setExtractMode('REPLACE')} /> استبدال العناصر غير المنفذة</label><label><input type="radio" checked={extractMode === 'APPEND'} onChange={() => setExtractMode('APPEND')} /> إضافة روابط جديدة فقط</label></div><p className="muted">لا يتم استبدال Queue بصمت. اختر الاستبدال أو الإضافة، وتُزال الروابط المكررة تلقائيًا في وضع الإضافة.</p></section>
       <section className="card"><div className="section-heading"><h2>Queue</h2><span className="session-progress">{state.queue.length} عنصر</span><button onClick={() => void act({ type: 'CLEAR_COMPLETED' })}>Clear Completed</button></div><div className="queue">{state.queue.map((item) => <QueueRow key={item.id} item={item} onAction={act} />)}{!state.queue.length && <p className="muted">لم تُستخرج روابط بعد.</p>}</div></section>
     </section>}
 
     {activeTab === 'workspaces' && <section className="tab-panel" role="tabpanel" aria-label="مساحات العمل">
       <section className="card"><div className="section-heading"><div><span className="eyebrow">PROJECTS</span><h2>كل مساحات العمل</h2></div><button className="primary" onClick={() => void createNewWorkspace()}>+ Workspace جديدة</button></div><p className="muted">المساحة النشطة: {activeWorkspace?.name ?? 'غير محددة'}{meta?.automationWorkspaceId ? ` · قيد التشغيل: ${workspaces.find((workspace) => workspace.id === meta.automationWorkspaceId)?.name ?? 'Workspace أخرى'}` : ''}</p></section>
-      <div className="workspace-list">{workspaces.map((workspace) => <WorkspaceCard key={workspace.id} workspace={workspace} active={workspace.id === meta?.activeWorkspaceId} running={workspace.id === meta?.automationWorkspaceId} onOpen={() => void switchWorkspace(workspace.id)} onArchive={() => void archive(workspace.id)} onDelete={() => void remove(workspace)} />)}</div>
+      <div className="workspace-list">{workspaces.map((workspace) => <WorkspaceCard key={workspace.id} workspace={workspace} active={workspace.id === meta?.activeWorkspaceId} running={workspace.id === meta?.automationWorkspaceId} onOpen={() => void switchWorkspace(workspace.id)} onArchive={() => void archive(workspace.id)} onRestore={() => void restore(workspace.id)} onDelete={() => void remove(workspace)} />)}</div>
     </section>}
 
     {activeTab === 'settings' && <section className="tab-panel" role="tabpanel" aria-label="الإعدادات">
@@ -97,8 +100,8 @@ function App() {
   </main>;
 }
 
-function WorkspaceCard({ workspace, active, running, onOpen, onArchive, onDelete }: { workspace: Workspace; active: boolean; running: boolean; onOpen: () => void; onArchive: () => void; onDelete: () => void }) {
-  return <article className={`workspace-card ${active ? 'active' : ''} ${workspace.archived ? 'archived' : ''}`}><div className="workspace-card-heading"><span className="workspace-icon" style={{ background: workspace.color ?? '#1d9bf0' }}>{workspace.icon ?? '◈'}</span><div><h3>{workspace.favorite ? '★ ' : ''}{workspace.name}</h3><p>{workspace.description || 'لا يوجد وصف'}</p></div></div><div className="workspace-card-stats"><span>{running ? '● يعمل الآن' : workspace.archived ? 'مؤرشف' : active ? 'نشط' : 'جاهز'}</span><span>آخر نشاط: {new Date(workspace.lastActivityAt).toLocaleDateString('ar')}</span></div><div className="workspace-card-actions"><button onClick={onOpen} disabled={workspace.archived}>فتح</button><button onClick={onArchive} disabled={workspace.archived || active}>أرشفة</button><button className="danger" onClick={onDelete} disabled={running}>حذف</button></div></article>;
+function WorkspaceCard({ workspace, active, running, onOpen, onArchive, onRestore, onDelete }: { workspace: Workspace; active: boolean; running: boolean; onOpen: () => void; onArchive: () => void; onRestore: () => void; onDelete: () => void }) {
+  return <article className={`workspace-card ${active ? 'active' : ''} ${workspace.archived ? 'archived' : ''}`}><div className="workspace-card-heading"><span className="workspace-icon" style={{ background: workspace.color ?? '#1d9bf0' }}>{workspace.icon ?? '◈'}</span><div><h3>{workspace.favorite ? '★ ' : ''}{workspace.name}</h3><p>{workspace.description || 'لا يوجد وصف'}</p></div></div><div className="workspace-card-stats"><span>{running ? '● يعمل الآن' : workspace.archived ? 'مؤرشف' : active ? 'نشط' : 'جاهز'}</span><span>آخر نشاط: {new Date(workspace.lastActivityAt).toLocaleDateString('ar')}</span></div><div className="workspace-card-actions"><button onClick={onOpen} disabled={workspace.archived}>فتح</button>{workspace.archived ? <button onClick={onRestore}>استعادة</button> : <button onClick={onArchive} disabled={active}>أرشفة</button>}<button className="danger" onClick={onDelete} disabled={running}>حذف</button></div></article>;
 }
 
 function TabButton({ id, activeTab, onSelect, icon, label }: { id: TabId; activeTab: TabId; onSelect: (id: TabId) => void; icon: string; label: string }) { return <button className={`tab-button ${activeTab === id ? 'active' : ''}`} role="tab" aria-selected={activeTab === id} onClick={() => onSelect(id)}><span aria-hidden="true">{icon}</span>{label}</button>; }

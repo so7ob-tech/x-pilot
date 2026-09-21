@@ -272,7 +272,7 @@ async function advanceSession(): Promise<void> {
   await processCurrentItem();
 }
 
-async function extractBank(bankUrl: string, workspaceId: string): Promise<AppState> {
+async function extractBank(bankUrl: string, workspaceId: string, mode: 'REPLACE' | 'APPEND' = 'REPLACE'): Promise<AppState> {
   let bankTabId: number | undefined;
   try {
     const tab = await chrome.tabs.create({ url: bankUrl, active: false });
@@ -287,14 +287,29 @@ async function extractBank(bankUrl: string, workspaceId: string): Promise<AppSta
       ...((result as { anchors?: Array<{ raw: string; label?: string }> } | undefined)?.anchors ?? []),
       { raw: (result as { markup?: string } | undefined)?.markup ?? '' }
     ]);
-    const queue: QueueItem[] = [];
+    const extractedQueue: QueueItem[] = [];
     for (const extracted of extraction.links) {
-      queue.push({ id: crypto.randomUUID(), workspaceId, sourceBankUrl: bankUrl, targetUrl: extracted.url, label: extracted.label, position: queue.length + 1, status: 'PENDING', attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
+      extractedQueue.push({ id: crypto.randomUUID(), workspaceId, sourceBankUrl: bankUrl, targetUrl: extracted.url, label: extracted.label, position: extractedQueue.length + 1, status: 'PENDING', attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
     }
-    const next = await updateWorkspaceState(workspaceId, (state) => ({ ...state, queue, banks: [...state.banks, { id: crypto.randomUUID(), workspaceId, name: new URL(bankUrl).hostname, url: bankUrl, createdAt: Date.now(), updatedAt: Date.now(), lastExtractedAt: Date.now(), lastExtractedCount: queue.length }], session: { ...(state.session ?? {}), workspaceId, id: crypto.randomUUID(), bankUrl, status: 'IDLE', currentIndex: 0, total: queue.length, intervalMinutes: defaultSettings.intervalMinutes, maxRetries: defaultSettings.maxRetries, failureBehavior: defaultSettings.failureBehavior, confirmBeforeStart: defaultSettings.confirmBeforeStart, keepAutomationTabOpen: defaultSettings.keepAutomationTabOpen, closeTabOnComplete: defaultSettings.closeTabOnComplete, version: 1, updatedAt: Date.now() } }));
+    const next = await updateWorkspaceState(workspaceId, (state) => {
+      if (mode === 'REPLACE' && state.session && ['RUNNING', 'WAITING', 'PAUSED'].includes(state.session.status)) throw new Error('QUEUE_REPLACE_WHILE_ACTIVE');
+      if (mode === 'REPLACE' && state.queue.some((item) => ['PUBLISHED', 'PUBLISHED_UNVERIFIED'].includes(item.status))) throw new Error('QUEUE_REPLACE_HAS_EXECUTED_ITEMS');
+      const existingUrls = new Set(state.queue.map((item) => item.targetUrl));
+      const queue = mode === 'APPEND'
+        ? [...state.queue, ...extractedQueue.filter((item) => !existingUrls.has(item.targetUrl))].map((item, index) => ({ ...item, position: index + 1 }))
+        : extractedQueue;
+      const now = Date.now();
+      const oldBank = state.banks.find((candidate) => candidate.url === bankUrl);
+      const bank = { id: oldBank?.id ?? crypto.randomUUID(), workspaceId, name: new URL(bankUrl).hostname, url: bankUrl, createdAt: oldBank?.createdAt ?? now, updatedAt: now, lastExtractedAt: now, lastExtractedCount: extractedQueue.length };
+      const banks = [...state.banks.filter((candidate) => candidate.url !== bankUrl), bank];
+      const session = mode === 'APPEND' && state.session
+        ? { ...state.session, total: queue.length, updatedAt: now }
+        : { ...(state.session ?? {}), workspaceId, id: crypto.randomUUID(), bankUrl, status: 'IDLE' as const, currentIndex: 0, total: queue.length, intervalMinutes: defaultSettings.intervalMinutes, maxRetries: defaultSettings.maxRetries, failureBehavior: defaultSettings.failureBehavior, confirmBeforeStart: defaultSettings.confirmBeforeStart, keepAutomationTabOpen: defaultSettings.keepAutomationTabOpen, closeTabOnComplete: defaultSettings.closeTabOnComplete, version: 1, updatedAt: now };
+      return { ...state, queue, banks, session };
+    });
     const nextState: AppState = { workspaceId: next.workspaceId, queue: next.queue, session: next.session, history: next.history };
     await broadcast(nextState);
-    console.info('Extracted bank', { total: queue.length, duplicateCount: extraction.duplicateCount, invalidCount: extraction.invalidCount });
+    console.info('Extracted bank', { total: next.queue.length, duplicateCount: extraction.duplicateCount, invalidCount: extraction.invalidCount, mode });
     return nextState;
   } finally {
     if (bankTabId) await chrome.tabs.remove(bankTabId).catch(() => undefined);
@@ -317,7 +332,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       const meta = await getMeta();
       const workspaceId = message.workspaceId ?? meta.activeWorkspaceId;
       if (meta.automationWorkspaceId && meta.automationWorkspaceId !== workspaceId) throw new Error('AUTOMATION_OWNED_BY_OTHER_WORKSPACE');
-      return extractBank(message.bankUrl, workspaceId);
+      return extractBank(message.bankUrl, workspaceId, message.mode ?? 'REPLACE');
     }
     case 'UPDATE_SETTINGS': await saveSettings(message.settings); return updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, ...message.settings, updatedAt: Date.now() } : state.session }));
     case 'START': {
