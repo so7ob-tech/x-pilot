@@ -138,7 +138,7 @@ export type RuntimeMessage =
   | { type: 'DELETE_WORKSPACE'; workspaceId: string; confirmed: boolean }
   | { type: 'SET_ACTIVE_WORKSPACE'; workspaceId: string }
   | { type: 'GET_RUNTIME_STATUS' }
-  | { type: 'EXTRACT_BANK'; bankUrl: string; workspaceId?: string }
+  | { type: 'EXTRACT_BANK'; bankUrl: string; workspaceId?: string; mode?: 'REPLACE' | 'APPEND' }
   | { type: 'START'; confirmed?: boolean; workspaceId?: string }
   | { type: 'PAUSE'; workspaceId?: string }
   | { type: 'RESUME'; workspaceId?: string }

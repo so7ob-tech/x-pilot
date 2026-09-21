@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1] - Unreleased
+
+### Fixed
+
+- Adds a visible Restore action for archived Workspaces.
+- Adds explicit Replace and Append choices when extracting a Tweet Bank.
+- Prevents replacing an active Queue or a Queue containing executed items without a guarded decision.
+- Deduplicates appended links by target URL and preserves existing Queue items.
+
 ## [0.5.0] - Unreleased
 
 ### Added
