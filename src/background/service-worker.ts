@@ -556,9 +556,32 @@ async function performPreflight(workspaceId: string) {
   const settings = await getSettings();
   const permissionsGranted = await chrome.permissions.contains({ origins: ['https://x.com/*', 'https://twitter.com/*'] }).catch(() => false);
   let xInspection: ContentInspection | null = null;
-  const candidateTabs = await chrome.tabs.query({ lastFocusedWindow: true });
-  const xTab = candidateTabs.find((tab) => /^https:\/\/(?:www\.)?(?:x|twitter)\.com\//i.test(tab.url ?? ''));
-  if (xTab?.id) xInspection = await inspectTab(xTab.id).catch(() => null);
+  let temporaryTabId: number | undefined;
+  try {
+    let xTab: chrome.tabs.Tab | undefined;
+    const automationTabId = state.session?.automationTabId;
+    if (automationTabId) {
+      const automationTab = await chrome.tabs.get(automationTabId).catch(() => undefined);
+      if (automationTab?.id && /^https:\/\/(?:www\.)?(?:x|twitter)\.com\//i.test(automationTab.url ?? '')) xTab = automationTab;
+    }
+    if (!xTab) {
+      const candidateTabs = await chrome.tabs.query({ url: ['https://x.com/*', 'https://twitter.com/*'] });
+      xTab = candidateTabs.find((tab) => tab.id !== undefined);
+    }
+    if (!xTab) {
+      const temporary = await chrome.tabs.create({ url: 'https://x.com/home', active: false });
+      if (!temporary.id) throw new Error('PREFLIGHT_X_TAB_CREATE_FAILED');
+      temporaryTabId = temporary.id;
+      xTab = temporary;
+      await waitForTabLoad(temporary.id);
+    }
+    if (!xTab.id) throw new Error('PREFLIGHT_X_TAB_NOT_FOUND');
+    xInspection = await inspectTab(xTab.id);
+  } catch (error) {
+    xInspection = { ok: false, pageKind: 'ERROR', composerFound: false, contentPresent: false, postButtonFound: false, postButtonEnabled: false, reason: error instanceof Error ? error.message : 'PREFLIGHT_X_INSPECTION_FAILED' };
+  } finally {
+    if (temporaryTabId !== undefined) await chrome.tabs.remove(temporaryTabId).catch(() => undefined);
+  }
   return runPreflight({ workspace, queue: state.queue, banks: state.banks, automationWorkspaceId: meta.automationWorkspaceId, alarmsAvailable: Boolean(chrome.alarms), permissionsGranted, settings, xInspection });
 }
 
