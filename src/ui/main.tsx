@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AppState, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
+import type { AppMetaState, AppState, QueueItem, RuntimeMessage, RuntimeStatus, Settings, Workspace } from '../domain/models';
 import { defaultSettings } from '../domain/models';
 import { getTweetPreview } from '../extraction/tweet-preview';
 import './styles.css';
 
 const initialState: AppState = { queue: [], session: null, history: [] };
 const initialRuntimeStatus: RuntimeStatus = { engineStatus: 'IDLE', connection: 'NOT_REQUIRED', checkedAt: 0 };
-type TabId = 'operation' | 'queue' | 'settings';
+type TabId = 'operation' | 'queue' | 'workspaces' | 'settings';
 
 function send(message: RuntimeMessage): Promise<any> { return chrome.runtime.sendMessage(message); }
 
@@ -19,6 +19,8 @@ function App() {
   const [nowMs, setNowMs] = useState(Date.now());
   const [activeTab, setActiveTab] = useState<TabId>('operation');
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus>(initialRuntimeStatus);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [meta, setMeta] = useState<AppMetaState | null>(null);
   const session = state.session;
   const published = useMemo(() => state.queue.filter((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED').length, [state.queue]);
   const failed = useMemo(() => state.queue.filter((item) => item.status === 'FAILED').length, [state.queue]);
@@ -28,10 +30,13 @@ function App() {
   const canPause = session?.status === 'RUNNING' || session?.status === 'WAITING';
   const canResume = session?.status === 'PAUSED';
   const logoUrl = chrome.runtime.getURL('branding/x-pilot-logo.png');
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === meta?.activeWorkspaceId);
+  const runningWorkspace = workspaces.find((workspace) => workspace.id === runtimeStatus.automationWorkspaceId);
 
   const refresh = async () => { const next = await send({ type: 'GET_STATE' }); if (next && !next.error) setState(next); };
+  const refreshWorkspaces = async () => { const next = await send({ type: 'GET_WORKSPACES' }); if (next?.workspaces) { setWorkspaces(next.workspaces); setMeta(next.meta); } };
   const refreshRuntimeStatus = async () => { const next = await send({ type: 'GET_RUNTIME_STATUS' }); if (next && !next.error) setRuntimeStatus(next); };
-  useEffect(() => { void refresh(); void refreshRuntimeStatus(); const listener = (message: any) => { if (message.type === 'STATE_UPDATED') { setState(message.state); void refreshRuntimeStatus(); } }; chrome.runtime.onMessage.addListener(listener); return () => chrome.runtime.onMessage.removeListener(listener); }, []);
+  useEffect(() => { void refresh(); void refreshWorkspaces(); void refreshRuntimeStatus(); const listener = (message: any) => { if (message.type === 'STATE_UPDATED') { setState(message.state); void refreshWorkspaces(); void refreshRuntimeStatus(); } }; chrome.runtime.onMessage.addListener(listener); return () => chrome.runtime.onMessage.removeListener(listener); }, []);
   useEffect(() => { const timer = window.setInterval(() => void refreshRuntimeStatus(), 1500); return () => window.clearInterval(timer); }, []);
   useEffect(() => { const timer = window.setInterval(() => setNowMs(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const act = async (message: RuntimeMessage, success?: string) => { const result = await send(message); if (result?.error) setNotice(result.error); else { if (result?.queue) setState(result); else await refresh(); if (success) setNotice(success); } };
@@ -43,22 +48,29 @@ function App() {
     const originPattern = `${parsed.protocol}//${parsed.host}/*`;
     const granted = await chrome.permissions.request({ origins: [originPattern] });
     if (!granted) return setNotice('لم يتم منح صلاحية قراءة نطاق بنك التغريدات');
-    const result = await send({ type: 'EXTRACT_BANK', bankUrl: bankUrl.trim() });
+    const result = await send({ type: 'EXTRACT_BANK', bankUrl: bankUrl.trim(), workspaceId: meta?.activeWorkspaceId });
     if (result?.error) return setNotice(`فشل الاستخراج: ${result.error}`);
     if (result?.queue) setState(result);
     setNotice(`تم العثور على ${result?.queue?.length ?? 0} رابطًا`);
   };
-  const start = async () => { if (settings.confirmBeforeStart && !window.confirm(`بدء نشر ${remaining} عنصر؟`)) return; await act({ type: 'START', confirmed: true }, 'بدأت الجلسة'); };
+  const start = async () => { if (settings.confirmBeforeStart && !window.confirm(`بدء نشر ${remaining} عنصر؟`)) return; await act({ type: 'START', confirmed: true, workspaceId: meta?.activeWorkspaceId }, 'بدأت الجلسة'); };
   const updateSettings = async (next: Settings) => { setSettings(next); await act({ type: 'UPDATE_SETTINGS', settings: next }); };
+  const switchWorkspace = async (workspaceId: string) => { const result = await send({ type: 'SET_ACTIVE_WORKSPACE', workspaceId }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); await refresh(); setActiveTab('operation'); };
+  const createNewWorkspace = async () => { const name = window.prompt('اسم Workspace الجديدة؟'); if (!name?.trim()) return; const result = await send({ type: 'CREATE_WORKSPACE', name: name.trim() }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); };
+  const archive = async (workspaceId: string) => { const result = await send({ type: 'ARCHIVE_WORKSPACE', workspaceId }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); await refresh(); };
+  const remove = async (workspace: Workspace) => { if (!window.confirm(`سيتم حذف Workspace "${workspace.name}" وبياناتها المحلية. هل تريد المتابعة؟`)) return; const result = await send({ type: 'DELETE_WORKSPACE', workspaceId: workspace.id, confirmed: true }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); await refresh(); };
 
   return <main className="shell">
     <header className="brand-header"><div className="brand-lockup"><img className="brand-logo" src={logoUrl} alt="X-Pilot" /><div><span className="eyebrow">LOCAL-FIRST · MV3</span><h1>قائمة نشر X</h1></div></div><span className={`status status-${session?.status ?? 'IDLE'}`}>{session?.status ?? 'IDLE'}</span></header>
+    <div className="workspace-switcher"><span className="eyebrow">WORKSPACE</span><select value={meta?.activeWorkspaceId ?? ''} onChange={(event) => void switchWorkspace(event.target.value)} aria-label="Workspace النشطة">{workspaces.filter((workspace) => !workspace.archived).map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.favorite ? '★ ' : ''}{workspace.name}</option>)}</select><button onClick={() => setActiveTab('workspaces')}>إدارة المساحات</button></div>
     <nav className="tabs-bar" aria-label="حالة X-Pilot والتبويبات"><div className="tabs" role="tablist">
       <TabButton id="operation" activeTab={activeTab} onSelect={setActiveTab} icon="▶" label="التشغيل" />
       <TabButton id="queue" activeTab={activeTab} onSelect={setActiveTab} icon="☷" label="بنك التغريدات" />
+      <TabButton id="workspaces" activeTab={activeTab} onSelect={setActiveTab} icon="▦" label="مساحات العمل" />
       <TabButton id="settings" activeTab={activeTab} onSelect={setActiveTab} icon="⚙" label="الإعدادات" />
     </div><div className="runtime-indicators" aria-live="polite"><StatusIndicator kind="connection" value={runtimeStatus.connection} label={connectionLabel(runtimeStatus.connection)} /><StatusIndicator kind="engine" value={runtimeStatus.engineStatus} label={engineLabel(runtimeStatus.engineStatus)} /></div></nav>
     {runtimeStatus.connection === 'DISCONNECTED' && <div className="runtime-warning" role="status">تبويب الأتمتة غير متصل — قد يتعذر تنفيذ التغريدة الحالية.</div>}
+    {runningWorkspace && runningWorkspace.id !== meta?.activeWorkspaceId && <button className="running-workspace" onClick={() => void switchWorkspace(runningWorkspace.id)}>● يعمل الآن: {runningWorkspace.name} — فتح Workspace الجارية</button>}
     {notice && <div className="notice">{notice}</div>}
 
     {activeTab === 'operation' && <section className="tab-panel" role="tabpanel" aria-label="التشغيل">
@@ -73,11 +85,20 @@ function App() {
       <section className="card"><div className="section-heading"><h2>Queue</h2><span className="session-progress">{state.queue.length} عنصر</span><button onClick={() => void act({ type: 'CLEAR_COMPLETED' })}>Clear Completed</button></div><div className="queue">{state.queue.map((item) => <QueueRow key={item.id} item={item} onAction={act} />)}{!state.queue.length && <p className="muted">لم تُستخرج روابط بعد.</p>}</div></section>
     </section>}
 
+    {activeTab === 'workspaces' && <section className="tab-panel" role="tabpanel" aria-label="مساحات العمل">
+      <section className="card"><div className="section-heading"><div><span className="eyebrow">PROJECTS</span><h2>كل مساحات العمل</h2></div><button className="primary" onClick={() => void createNewWorkspace()}>+ Workspace جديدة</button></div><p className="muted">المساحة النشطة: {activeWorkspace?.name ?? 'غير محددة'}{meta?.automationWorkspaceId ? ` · قيد التشغيل: ${workspaces.find((workspace) => workspace.id === meta.automationWorkspaceId)?.name ?? 'Workspace أخرى'}` : ''}</p></section>
+      <div className="workspace-list">{workspaces.map((workspace) => <WorkspaceCard key={workspace.id} workspace={workspace} active={workspace.id === meta?.activeWorkspaceId} running={workspace.id === meta?.automationWorkspaceId} onOpen={() => void switchWorkspace(workspace.id)} onArchive={() => void archive(workspace.id)} onDelete={() => void remove(workspace)} />)}</div>
+    </section>}
+
     {activeTab === 'settings' && <section className="tab-panel" role="tabpanel" aria-label="الإعدادات">
       <section className="card settings-card"><div className="settings-heading"><img src={logoUrl} alt="" /><div><span className="eyebrow">X-PILOT SETTINGS</span><h2>الإعدادات</h2></div></div><label>الفاصل بالدقائق<input type="number" min="0.5" step="0.5" value={settings.intervalMinutes} onChange={(event) => void updateSettings({ ...settings, intervalMinutes: Number(event.target.value) })} /></label><label>Maximum Retry Attempts<input type="number" min="0" max="10" value={settings.maxRetries} onChange={(event) => void updateSettings({ ...settings, maxRetries: Number(event.target.value) })} /></label><label className="check"><input type="checkbox" checked={settings.confirmBeforeStart} onChange={(event) => void updateSettings({ ...settings, confirmBeforeStart: event.target.checked })} /> تأكيد قبل بدء Queue</label><label className="check"><input type="checkbox" checked={settings.keepAutomationTabOpen} onChange={(event) => void updateSettings({ ...settings, keepAutomationTabOpen: event.target.checked })} /> إبقاء تبويب الأتمتة مفتوحًا</label><label className="check"><input type="checkbox" checked={settings.closeTabOnComplete} onChange={(event) => void updateSettings({ ...settings, closeTabOnComplete: event.target.checked })} /> إغلاق التبويب عند اكتمال Queue</label></section>
     </section>}
     <footer>لا تُخزن بيانات الدخول ولا تُرسل البيانات إلى Backend. عند ظهور Login أو CAPTCHA أو تحدٍ أمني تتوقف الإضافة.</footer>
   </main>;
+}
+
+function WorkspaceCard({ workspace, active, running, onOpen, onArchive, onDelete }: { workspace: Workspace; active: boolean; running: boolean; onOpen: () => void; onArchive: () => void; onDelete: () => void }) {
+  return <article className={`workspace-card ${active ? 'active' : ''} ${workspace.archived ? 'archived' : ''}`}><div className="workspace-card-heading"><span className="workspace-icon" style={{ background: workspace.color ?? '#1d9bf0' }}>{workspace.icon ?? '◈'}</span><div><h3>{workspace.favorite ? '★ ' : ''}{workspace.name}</h3><p>{workspace.description || 'لا يوجد وصف'}</p></div></div><div className="workspace-card-stats"><span>{running ? '● يعمل الآن' : workspace.archived ? 'مؤرشف' : active ? 'نشط' : 'جاهز'}</span><span>آخر نشاط: {new Date(workspace.lastActivityAt).toLocaleDateString('ar')}</span></div><div className="workspace-card-actions"><button onClick={onOpen} disabled={workspace.archived}>فتح</button><button onClick={onArchive} disabled={workspace.archived || active}>أرشفة</button><button className="danger" onClick={onDelete} disabled={running}>حذف</button></div></article>;
 }
 
 function TabButton({ id, activeTab, onSelect, icon, label }: { id: TabId; activeTab: TabId; onSelect: (id: TabId) => void; icon: string; label: string }) { return <button className={`tab-button ${activeTab === id ? 'active' : ''}`} role="tab" aria-selected={activeTab === id} onClick={() => onSelect(id)}><span aria-hidden="true">{icon}</span>{label}</button>; }
