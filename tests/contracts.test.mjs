@@ -192,6 +192,15 @@ test('Individual Queue mutations persist, broadcast, and clear stale selection a
   assert.match(uiSource, /onAction=\{queueAction\}/);
 });
 
+test('Start creates a session when missing and automation-tab failure cannot leave an item stuck', () => {
+  assert.match(serviceWorker, /case 'START':/);
+  assert.match(serviceWorker, /const firstItem = current\.queue\.find\(\(item\) => canStartItem\(item\.status\)/);
+  assert.match(serviceWorker, /const session(?:: AutomationSession)? = current\.session \?\? \{/);
+  assert.match(serviceWorker, /let tabId: number \| undefined/);
+  assert.match(serviceWorker, /tabId = await getOrCreateAutomationTab\(session\)/);
+  assert.match(serviceWorker, /const failedStatus = exhausted \? 'FAILED' : 'PENDING'/);
+});
+
 test('Feature 15 exposes derived Workspace and global Analytics Dashboard metrics', () => {
   assert.match(uiSource, /AnalyticsDashboard/);
   assert.match(uiSource, /Total sessions/);
@@ -336,7 +345,7 @@ test('Workspace runtime operations expose explicit ownership and management APIs
   assert.match(storage, /export async function claimAutomationOwner/);
   assert.match(storage, /AUTOMATION_OWNED_BY_OTHER_WORKSPACE/);
   assert.match(storage, /export async function releaseAutomationOwner/);
-  assert.match(serviceWorker, /await claimAutomationOwner\(message\.workspaceId \?\? meta\.activeWorkspaceId\)/);
+  assert.match(serviceWorker, /await claimAutomationOwner\(workspaceId\)/);
   assert.match(serviceWorker, /GET_WORKSPACES/);
   assert.match(serviceWorker, /SET_ACTIVE_WORKSPACE/);
   assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'diagnostics' \| 'workspaces' \| 'settings'/);
