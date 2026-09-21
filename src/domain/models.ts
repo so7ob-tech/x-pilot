@@ -45,7 +45,7 @@ export interface LegacyPublishAttempt { id: string; workspaceId?: string; sessio
 export const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false, duplicatePolicy: 'BLOCK', publishingWindows: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', notificationsEnabled: true, badgeMode: 'COUNT' };
 export type AutomationConnection = 'CONNECTED' | 'DISCONNECTED' | 'NOT_REQUIRED';
 export interface RuntimeStatus { engineStatus: SessionStatus; connection: AutomationConnection; automationTabId?: number; automationWorkspaceId?: string; checkedAt: number; }
-export interface PreflightResult { ready: boolean; checkedAt: number; workspaceId: string; summary: string; checks: Array<{ id: string; status: 'PASS' | 'WARN' | 'FAIL'; message: string; details?: string; blocking: boolean }>; counts: { total: number; ready: number; published: number; failed: number; skipped: number; duplicates: number; publishedDuplicates: number; invalid: number }; }
+export interface PreflightResult { ready: boolean; checkedAt: number; workspaceId: string; summaryKey: string; summaryParams: Record<string, string | number>; checks: Array<{ id: string; status: 'PASS' | 'WARN' | 'FAIL'; messageKey: string; detailsKey?: string; params?: Record<string, string | number>; blocking: boolean }>; counts: { total: number; ready: number; published: number; failed: number; skipped: number; duplicates: number; publishedDuplicates: number; invalid: number }; }
 export type DryRunItemStatus = 'READY' | 'LOGIN_REQUIRED' | 'CONTENT_MISSING' | 'POST_BUTTON_NOT_FOUND' | 'INVALID_URL' | 'CHALLENGE_DETECTED' | 'ERROR';
 export type DryRunMode = 'FIRST_ITEM' | 'ENTIRE_QUEUE';
 export type DryRunSessionStatus = 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'FAILED';
@@ -57,7 +57,7 @@ export interface BackupValidation { valid: boolean; summary?: BackupSummary; err
 export type BulkQueueAction = 'DELETE' | 'SKIP' | 'RETRY' | 'RESET_PENDING' | 'MOVE_TOP' | 'MOVE_BOTTOM' | 'ASSIGN_BANK' | 'EXPORT';
 export interface BulkActionResult { action: BulkQueueAction; requestedIds: string[]; affectedIds: string[]; rejectedIds: string[]; activeItemId?: string; exportedItems?: QueueItem[]; }
 export type DiagnosticsCheckStatus = 'OK' | 'WARN' | 'FAIL' | 'NOT_CHECKED';
-export interface DiagnosticsCheck { id: string; label: string; status: DiagnosticsCheckStatus; message: string; details?: string; }
+export interface DiagnosticsCheck { id: string; label: string; labelKey?: string; status: DiagnosticsCheckStatus; message: string; details?: string; detailsKey?: string; }
 export interface DiagnosticsResult { checkedAt: number; extensionVersion: string; schemaVersion: AppMetaState['schemaVersion'] | 'UNKNOWN'; activeWorkspaceId?: string; automationWorkspaceId?: string; runningSession?: { id: string; status: SessionStatus; currentItemId?: string }; alarm?: { name: string; scheduledTime?: number; periodInMinutes?: number }; automationTabId?: number; checks: DiagnosticsCheck[]; safe: boolean; }
 export type RuntimeMessage =
   | { type: 'GET_STATE' } | { type: 'GET_WORKSPACES' } | { type: 'GET_WORKSPACE_STATE'; workspaceId?: string } | { type: 'GET_SESSION_HISTORY'; workspaceId?: string } | { type: 'PREFLIGHT_CHECK'; workspaceId?: string } | { type: 'RUN_DIAGNOSTICS' }

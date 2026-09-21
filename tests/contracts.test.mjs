@@ -120,8 +120,8 @@ test('Full Backup / Restore validates before replacing local data', () => {
   assert.match(storage, /export function validateBackup/);
   assert.match(storage, /export async function restoreBackup/);
   assert.match(serviceWorker, /BACKUP_RESTORE_WHILE_AUTOMATION_ACTIVE/);
-  assert.match(uiSource, /تصدير نسخة كاملة/);
-  assert.match(uiSource, /استعادة نسخة JSON/);
+  assert.match(uiSource, /backup\.export/);
+  assert.match(uiSource, /backup\.restore/);
 });
 
 test('Phase 2 exposes persistent scheduling, profiles, notifications, and Badge controls', () => {
@@ -141,14 +141,14 @@ test('Phase 2 exposes persistent scheduling, profiles, notifications, and Badge 
   assert.match(uiSource, /ui\.reschedule/);
   assert.match(uiSource, /PublishingWindowsEditor/);
   assert.match(fs.readFileSync(path.join(root, 'src/ui/components/publishing-windows-editor.tsx'), 'utf8'), /type="time"/);
-  assert.match(fs.readFileSync(path.join(root, 'src/ui/components/publishing-windows-editor.tsx'), 'utf8'), /إضافة نافذة/);
+  assert.match(fs.readFileSync(path.join(root, 'src/ui/components/publishing-windows-editor.tsx'), 'utf8'), /publishingWindows\.add/);
 });
 
 test('Dry Run results show item number and preview without exposing target URLs', () => {
   assert.match(models, /DryRunItemResult \{ queueItemId: string; position: number/);
   assert.match(serviceWorker, /position: item\.position/);
-  assert.match(uiSource, /العنصر #\{item\.position\}/);
-  assert.match(uiSource, /getDryRunPreview\(item\.targetUrl\)/);
+  assert.match(uiSource, /tests\.itemNumber/);
+  assert.match(uiSource, /getDryRunPreview\(item\.targetUrl,/);
   assert.doesNotMatch(uiSource.slice(uiSource.indexOf('export function DryRunCard'), uiSource.indexOf('export function CurrentTweetCard')), /item\.targetUrl\}\/span>/);
 });
 
@@ -167,24 +167,24 @@ test('Preflight automatically opens X and inspects readiness without publishing'
   assert.match(serviceWorker, /await waitForTabLoad\(temporary\.id\)/);
   assert.match(serviceWorker, /xInspection = await inspectTab\(temporary\.id\)/);
   assert.match(serviceWorker, /finally \{\s*if \(temporaryTabId !== undefined\) await chrome\.tabs\.remove/);
-  assert.match(uiSource, /اضغط فحص الآن؛ سيقوم X-Pilot بفتح تبويب X تلقائيًا/);
+  assert.match(uiSource, /preflight\.pressCheck/);
   assert.match(uiSource, /className="preflight-icon"/);
 });
 
 test('Feature 13 exposes shared advanced search filters across all entity views', () => {
   assert.match(uiSource, /SearchToolbar/);
-  assert.match(uiSource, /label="الجلسات"/);
-  assert.match(uiSource, /label="السجل"/);
+  assert.match(uiSource, /nav\.sessions/);
+  assert.match(uiSource, /nav\.history/);
   assert.match(uiSource, /filterQueue/);
   assert.match(uiSource, /filterBanks/);
   assert.match(uiSource, /filterSessions/);
   assert.match(uiSource, /filterHistory/);
-  assert.match(uiSource, /فلترة حسب الحالة/);
-  assert.match(uiSource, /فلترة حسب البنك/);
-  assert.match(uiSource, /فلترة حسب الجلسة/);
-  assert.match(uiSource, /فلترة حسب Workspace/);
-  assert.match(uiSource, /من تاريخ/);
-  assert.match(uiSource, /إلى تاريخ/);
+  assert.match(uiSource, /filters\.status/);
+  assert.match(uiSource, /filters\.allBanks/);
+  assert.match(uiSource, /filters\.allSessions/);
+  assert.match(uiSource, /filters\.allWorkspaces/);
+  assert.match(uiSource, /filters\.from/);
+  assert.match(uiSource, /filters\.to/);
   assert.match(models, /sessionId\?: string/);
 });
 
@@ -195,7 +195,7 @@ test('Feature 14 exposes all Bulk Queue actions with active-item protection', ()
   assert.match(serviceWorker, /BULK_ACTIVE_ITEM_CONFIRMATION_REQUIRED/);
   assert.match(serviceWorker, /BULK_ACTIVE_ITEM_BUSY/);
   assert.match(serviceWorker, /BULK_BANK_NOT_FOUND_OR_ARCHIVED/);
-  assert.match(uiSource, /تحديد عناصر الصفحة/);
+  assert.match(uiSource, /queue\.selectPage/);
   assert.match(uiSource, /common\.resetPending/);
   assert.match(uiSource, /common\.moveTop/);
   assert.match(uiSource, /common\.moveBottom/);
@@ -377,7 +377,7 @@ test('Workspace extraction does not silently overwrite Queue data', () => {
   assert.match(serviceWorker, /QUEUE_REPLACE_WHILE_ACTIVE/);
   assert.match(serviceWorker, /QUEUE_REPLACE_HAS_EXECUTED_ITEMS/);
   assert.match(serviceWorker, /existingUrls/);
-  assert.match(uiSource, /إضافة روابط جديدة فقط/);
+  assert.match(uiSource, /banks\.append/);
   assert.match(uiSource, /تحتوي Queue على عناصر منشورة/);
   assert.match(uiSource, /onRestore/);
 });
@@ -395,7 +395,7 @@ test('Multiple Tweet Banks remain explicit and Workspace-scoped', () => {
   assert.match(serviceWorker, /case 'GET_BANKS'/);
   assert.match(serviceWorker, /sourceBankId: bankId/);
   assert.match(uiSource, /className=\{`bank-card/);
-  assert.match(uiSource, /إضافة بنك/);
+  assert.match(uiSource, /banks\.add/);
 });
 
 test('Refresh Diff is non-destructive and supports selective Queue merge', () => {
@@ -407,8 +407,8 @@ test('Refresh Diff is non-destructive and supports selective Queue merge', () =>
   assert.match(serviceWorker, /classifyBankDiff\(workspaceId, bank, snapshot, state.queue,/);
   assert.match(serviceWorker, /mergeSelectedDiffItems\(workspaceState.queue, diff, bank, message.itemIds,/);
   assert.match(uiSource, /ui\.refreshDiff/);
-  assert.match(uiSource, /إضافة المحدد إلى Queue/);
-  assert.match(uiSource, /مراجعة تغييرات البنك/);
+  assert.match(uiSource, /diff\.addSelected/);
+  assert.match(uiSource, /diff\.title/);
 });
 
 test('Duplicate Protection exposes SHA-256 fingerprints and policy controls', () => {
@@ -418,8 +418,8 @@ test('Duplicate Protection exposes SHA-256 fingerprints and policy controls', ()
   assert.match(serviceWorker, /fingerprintTweet/);
   assert.match(serviceWorker, /fingerprintIndex/);
   assert.match(uiSource, /settings\.duplicatePolicy/);
-  assert.match(uiSource, /سبق نشر هذا المحتوى/);
-  assert.match(uiSource, /محتوى مكرر/);
+  assert.match(uiSource, /diff\.previouslyPublishedContent/);
+  assert.match(uiSource, /diff\.duplicateContent/);
 });
 
 test('Preflight Check exposes structured checks and guards Start', () => {
@@ -427,12 +427,12 @@ test('Preflight Check exposes structured checks and guards Start', () => {
   assert.match(serviceWorker, /performPreflight/);
   assert.match(serviceWorker, /PREFLIGHT_FAILED/);
   assert.match(uiSource, /tests\.preflight/);
-  assert.match(uiSource, /فحص الآن/);
+  assert.match(uiSource, /tests\.runPreflight/);
 });
 
 test('Queue exposes selectable page sizes and previous/next pagination', () => {
   assert.match(pagination, /export type PageSize = 10 \| 50 \| 100 \| 'ALL'/);
-  assert.match(uiSource, /عدد عناصر Queue في الصفحة/);
+  assert.match(uiSource, /queue\.selectPage/);
   assert.match(uiSource, /value="10"/);
   assert.match(uiSource, /value="50"/);
   assert.match(uiSource, /value="100"/);
@@ -444,6 +444,6 @@ test('Queue exposes selectable page sizes and previous/next pagination', () => {
 
 test('daily-limit internal code is translated only at the UI presentation boundary', () => {
   assert.match(errorMessages, /X_DAILY_POST_LIMIT_REACHED/);
-  assert.match(errorMessages, /لقد وصلت إلى الحد الأقصى لعدد المنشورات اليومية/);
+  assert.match(errorMessages, /errors\.dailyPostLimitReached/);
   assert.match(uiSource, /getUserFacingMessage/);
 });

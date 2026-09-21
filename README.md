@@ -1,5 +1,7 @@
 # X-Pilot
 
+> **v0.25.3:** اكتملت تغطية الترجمة العربية والإنجليزية للواجهة الرئيسية وإشعارات الخلفية ونتائج Preflight وDiagnostics، مع إضافة عقود تكافؤ تمنع اختلاف مفاتيح اللغتين.
+
 <p align="center">
   <img src="public/branding/x-pilot-logo.png" alt="X-Pilot logo" width="180" />
 </p>

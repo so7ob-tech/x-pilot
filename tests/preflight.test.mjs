@@ -14,7 +14,8 @@ test('passes a fully ready Queue and reports counts', () => {
   const result = runPreflight(base());
   assert.equal(result.ready, true);
   assert.equal(result.counts.ready, 1);
-  assert.match(result.summary, /جاهز/);
+  assert.equal(result.summaryKey, 'preflight.ready');
+  assert.deepEqual(result.summaryParams, { ready: 1, total: 1 });
 });
 
 test('blocks an empty Queue and invalid retry configuration', () => {

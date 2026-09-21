@@ -1,5 +1,6 @@
 export type LanguagePreference = 'AUTO' | 'AR' | 'EN';
 export type Locale = 'ar' | 'en';
+export type TranslationNamespace = Record<string, string | Record<string, string>>;
 
 export type TranslationTree = {
   common: Record<string, string>;
@@ -13,7 +14,26 @@ export type TranslationTree = {
   banks: Record<string, string>;
   tests: Record<string, string>;
   analytics: Record<string, string>;
-  diagnostics: Record<string, string>;
+  diagnostics: Record<string, string | Record<string, string>>;
   workspaces: Record<string, string>;
   ui: Record<string, string>;
+  search: Record<string, string>;
+  filters: Record<string, string>;
+  sessions: Record<string, string>;
+  history: Record<string, string>;
+  diff: Record<string, string>;
+  publishingWindows: Record<string, string>;
+  preflight: Record<string, string>;
+  notifications: Record<string, string>;
+  backup: Record<string, string>;
+  dates: Record<string, string>;
+  units: Record<string, string>;
+  badges: Record<string, string>;
+  duplicatePolicy: Record<string, string>;
+  connection: Record<string, string>;
+  recovery: Record<string, string>;
+  prompts: Record<string, string>;
+  confirm: Record<string, string>;
+  schedule: Record<string, string>;
+  bulk: Record<string, string>;
 };
