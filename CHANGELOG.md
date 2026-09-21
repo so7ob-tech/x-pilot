@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.1] - Patch
+
+### Changed
+
+- Added an explicit ordered storage migration registry for legacy, schema 2, schema 3, and schema 4 transitions.
+- Added non-persistent timing for selected `chrome.storage.local` reads and writes; slow operations are reported through `console.debug` without recording content or URLs.
+- Preserved existing storage keys during the first migration and added regression coverage for idempotency and data retention.
+
 ## [0.18.0] - Unreleased
 
 ### Added
