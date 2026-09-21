@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.7] - Unreleased
+
+### Added
+
+- Adds the official transparent X-Pilot logo to Chrome extension icons and the Side Panel.
+- Adds branded Settings and Recovery surfaces.
+- Documents the branding assets and includes the logo in the project README.
+
 ## [0.3.6] - Unreleased
 
 ### Fixed
