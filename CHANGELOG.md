@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.4] - Patch
+
+### Fixed
+
+- Individual Queue actions now persist through the same runtime path as Bulk Actions.
+- Delete, Retry, Skip, Clear Completed, and Reorder broadcast `STATE_UPDATED` immediately.
+- Deleted items disappear immediately and are removed from the selected-items state.
+
 ## [0.19.3] - Patch
 
 ### Fixed

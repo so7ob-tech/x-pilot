@@ -180,6 +180,16 @@ test('Feature 14 exposes all Bulk Queue actions with active-item protection', ()
   assert.match(uiSource, /Export selected/);
 });
 
+test('Individual Queue mutations persist, broadcast, and clear stale selection after deletion', () => {
+  assert.match(serviceWorker, /async function commitQueueMutation/);
+  assert.match(serviceWorker, /case 'DELETE_ITEM': return commitQueueMutation/);
+  assert.match(serviceWorker, /case 'REORDER': return commitQueueMutation/);
+  assert.match(serviceWorker, /await broadcast\(next\)/);
+  assert.match(uiSource, /const queueAction = async/);
+  assert.match(uiSource, /message\.type === 'DELETE_ITEM'/);
+  assert.match(uiSource, /onAction=\{queueAction\}/);
+});
+
 test('Feature 15 exposes derived Workspace and global Analytics Dashboard metrics', () => {
   assert.match(uiSource, /AnalyticsDashboard/);
   assert.match(uiSource, /Total sessions/);
