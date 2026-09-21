@@ -79,3 +79,11 @@ test('all tabs share the same header and the Workspace switcher stays compact', 
   assert.doesNotMatch(ui, /activeWorkspace\?\.icon \?\? '◈'/);
   assert.doesNotMatch(css, /\.shell-operation \.app-header|\.shell-operation \.premium-switcher/);
 });
+
+test('informational notices auto-dismiss while errors remain readable', () => {
+  assert.match(ui, /useEffect\(\(\) => \{ if \(!notice \|\| noticeKind === 'error'\)/);
+  assert.match(ui, /window\.setTimeout\(\(\) => setNoticeState\(''\), 3500\)/);
+  assert.match(ui, /notice-\$\{noticeKind\}/);
+  assert.match(ui, /notice-dismiss/);
+  assert.doesNotMatch(ui, /لا تُخزن بيانات الدخول/);
+});

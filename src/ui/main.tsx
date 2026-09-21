@@ -24,7 +24,8 @@ function App() {
   const [bankUrl, setBankUrl] = useState('');
   const [extractMode, setExtractMode] = useState<'REPLACE' | 'APPEND'>('REPLACE');
   const [settings, setSettings] = useState<Settings>(defaultSettings);
-  const [notice, setNotice] = useState('');
+  const [notice, setNoticeState] = useState('');
+  const [noticeKind, setNoticeKind] = useState<'info' | 'error'>('info');
   const [nowMs, setNowMs] = useState(Date.now());
   const [activeTab, setActiveTab] = useState<TabId>('operation');
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus>(initialRuntimeStatus);
@@ -46,6 +47,7 @@ function App() {
   const [analyticsWorkspaceId, setAnalyticsWorkspaceId] = useState('*');
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null);
   const [scheduleAt, setScheduleAt] = useState('');
+  const setNotice = (message: string) => { setNoticeState(message); setNoticeKind(isErrorNotice(message) ? 'error' : 'info'); };
   const session = state.session;
   const published = useMemo(() => state.queue.filter((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED').length, [state.queue]);
   const failed = useMemo(() => state.queue.filter((item) => item.status === 'FAILED').length, [state.queue]);
@@ -69,6 +71,7 @@ function App() {
   useEffect(() => { if (meta?.activeWorkspaceId) void refreshBanks(); }, [meta?.activeWorkspaceId]);
   useEffect(() => { const timer = window.setInterval(() => void refreshRuntimeStatus(), 1500); return () => window.clearInterval(timer); }, []);
   useEffect(() => { const timer = window.setInterval(() => setNowMs(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { if (!notice || noticeKind === 'error') return; const timer = window.setTimeout(() => setNoticeState(''), 3500); return () => window.clearTimeout(timer); }, [notice, noticeKind]);
   const act = async (message: RuntimeMessage, success?: string) => { const result = await send(message); if (result?.error) setNotice(result.error); else { if (result?.queue) setState(result); else await refresh(); setPreflight(null); if (success) setNotice(success); } };
   const queueAction = async (message: RuntimeMessage, success?: string) => {
     await act(message, success);
@@ -159,7 +162,7 @@ function App() {
     </div><div className="runtime-indicators" aria-live="polite"><StatusIndicator kind="connection" value={runtimeStatus.connection} label={connectionLabel(runtimeStatus.connection)} /><StatusIndicator kind="engine" value={runtimeStatus.engineStatus} label={engineLabel(runtimeStatus.engineStatus)} /></div></nav>
     {runtimeStatus.connection === 'DISCONNECTED' && <div className="runtime-warning" role="status">تبويب الأتمتة غير متصل — قد يتعذر تنفيذ التغريدة الحالية.</div>}
     {runningWorkspace && runningWorkspace.id !== meta?.activeWorkspaceId && <button className="running-workspace" onClick={() => void switchWorkspace(runningWorkspace.id)}>● يعمل الآن: {runningWorkspace.name} — فتح Workspace الجارية</button>}
-    {notice && <div className="notice">{notice}</div>}
+    {notice && <div className={`notice notice-${noticeKind}`} role={noticeKind === 'error' ? 'alert' : 'status'} aria-live="polite"><span>{notice}</span><button type="button" className="notice-dismiss" onClick={() => setNoticeState('')} aria-label="إغلاق الرسالة">×</button></div>}
 
     {activeTab === 'operation' && <OperationTab state={state} session={session} currentItem={currentItem} logoUrl={logoUrl} activeWorkspaceName={activeWorkspace?.name} published={published} failed={failed} remaining={remaining} progress={progress} countdownSeconds={countdownSeconds} canPause={canPause} canResume={canResume} preflight={preflight} settings={settings} scheduleAt={scheduleAt} setScheduleAt={setScheduleAt} start={() => void start()} stop={() => void stop()} schedule={(reschedule) => void schedule(reschedule)} act={(message, success) => void act(message, success)} />}
 
@@ -193,8 +196,11 @@ function App() {
     {activeTab === 'settings' && <section className="tab-panel" role="tabpanel" aria-label="الإعدادات">
       <section className="card settings-card"><div className="settings-heading"><img src={logoUrl} alt="" /><div><span className="eyebrow">X-PILOT SETTINGS</span><h2>الإعدادات</h2></div></div><label>الفاصل بالدقائق<input type="number" min="0.5" step="0.5" value={settings.intervalMinutes} onChange={(event) => void updateSettings({ ...settings, intervalMinutes: Number(event.target.value) })} /></label><label>Maximum Retry Attempts<input type="number" min="0" max="10" value={settings.maxRetries} onChange={(event) => void updateSettings({ ...settings, maxRetries: Number(event.target.value) })} /></label><label>Time Zone<input value={settings.timezone} onChange={(event) => void updateSettings({ ...settings, timezone: event.target.value })} placeholder="Asia/Aden" dir="ltr" /></label><PublishingWindowsEditor windows={settings.publishingWindows} onSave={(publishingWindows) => void updateSettings({ ...settings, publishingWindows })} /><label>سياسة التكرار<select value={settings.duplicatePolicy} onChange={(event) => void updateSettings({ ...settings, duplicatePolicy: event.target.value as Settings['duplicatePolicy'] })}><option value="BLOCK">حظر التكرار</option><option value="WARN">تحذير مع السماح</option><option value="ALLOW">السماح</option></select></label><label>Badge<select value={settings.badgeMode} onChange={(event) => void updateSettings({ ...settings, badgeMode: event.target.value as Settings['badgeMode'] })}><option value="COUNT">عدد العناصر المتبقية</option><option value="STATUS">حالة التشغيل</option><option value="NONE">بدون Badge</option></select></label><label className="check"><input type="checkbox" checked={settings.notificationsEnabled} onChange={(event) => void updateSettings({ ...settings, notificationsEnabled: event.target.checked })} /> تفعيل إشعارات الأحداث المهمة</label><label className="check"><input type="checkbox" checked={settings.confirmBeforeStart} onChange={(event) => void updateSettings({ ...settings, confirmBeforeStart: event.target.checked })} /> تأكيد قبل بدء Queue</label><label className="check"><input type="checkbox" checked={settings.keepAutomationTabOpen} onChange={(event) => void updateSettings({ ...settings, keepAutomationTabOpen: event.target.checked })} /> إبقاء تبويب الأتمتة مفتوحًا</label><label className="check"><input type="checkbox" checked={settings.closeTabOnComplete} onChange={(event) => void updateSettings({ ...settings, closeTabOnComplete: event.target.checked })} /> إغلاق التبويب عند اكتمال Queue</label><div className="profile-actions"><h3>Workspace Automation Profile</h3><p className="muted">الإعدادات الحالية تعمل كـ Global Defaults. يمكنك حفظها كـ Override للمساحة الحالية.</p><button onClick={() => void saveWorkspaceProfile()}>حفظ كـ Workspace Override</button><button onClick={() => void clearWorkspaceProfile()}>استخدام Global Defaults</button></div><div className="backup-actions"><h3>Full Backup / Restore</h3><p className="muted">نسخة JSON محلية تشمل جميع Workspaces والبنوك وQueue والسجل والإعدادات. لا تشمل بيانات الدخول أو التبويب المؤقت.</p><div className="row controls-row"><button className="primary" onClick={() => void exportFullBackup()}>تصدير نسخة كاملة</button><label className="button-like">استعادة نسخة JSON<input type="file" accept="application/json,.json" onChange={(event) => void restoreFullBackup(event)} /></label></div></div></section>
     </section>}
-    <footer>لا تُخزن بيانات الدخول ولا تُرسل البيانات إلى Backend. عند ظهور Login أو CAPTCHA أو تحدٍ أمني تتوقف الإضافة.</footer>
   </main>;
+}
+
+function isErrorNotice(message: string): boolean {
+  return /^(فشل|خطأ|INVALID|ERROR|BULK_|PUBLISH_|LOGIN_|لم يتم|يجب أن|حدد |اختر |العنصر الجاري|ملف النسخة غير صالح)/i.test(message.trim());
 }
 
 function WorkspaceCard({ workspace, active, running, onOpen, onArchive, onRestore, onDelete }: { workspace: Workspace; active: boolean; running: boolean; onOpen: () => void; onArchive: () => void; onRestore: () => void; onDelete: () => void }) {
