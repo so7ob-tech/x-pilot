@@ -424,6 +424,15 @@ test('Refresh Diff is non-destructive and supports selective Queue merge', () =>
   assert.match(uiSource, /diff\.title/);
 });
 
+test('Refresh Diff requests optional host permission before reading a first-time bank', () => {
+  assert.match(uiSource, /const refreshSelectedBank = async \(bank: TweetBank\)/);
+  assert.match(uiSource, /chrome\.permissions\.request\(\{ origins: \[originPattern\] \}\)/);
+  assert.match(uiSource, /if \(!granted\) return setNotice\(t\('banks\.permissionRequired'\)\)/);
+  assert.match(uiSource, /Cannot access contents of url/);
+  assert.match(uiSource, /t\('banks\.permissionRequired'\)/);
+  assert.match(JSON.stringify(manifest), /optional_host_permissions/);
+});
+
 test('Duplicate Protection exposes SHA-256 fingerprints and policy controls', () => {
   assert.match(models, /contentFingerprint/);
   assert.match(models, /DuplicatePolicy/);
