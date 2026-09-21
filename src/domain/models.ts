@@ -7,12 +7,12 @@ export type HistoricalSessionStatus = 'SCHEDULED' | 'RUNNING' | 'PAUSED' | 'WAIT
 export interface QueueItem {
   id: string; workspaceId?: string; sourceBankId?: string; sourceBankUrl: string; targetUrl: string; label?: string; position: number;
   status: QueueItemStatus; attempts: number; createdAt: number; updatedAt: number; startedAt?: number;
-  publishedAt?: number; lastError?: string; operationId?: string; contentFingerprint?: string; normalizedContent?: string; duplicateStatus?: 'UNIQUE' | 'DUPLICATE' | 'PUBLISHED_DUPLICATE'; duplicateOfItemId?: string;
+  publishedAt?: number; lastError?: string; operationId?: string; publishIntentId?: string; publishStartedAt?: number; publishSubmittedAt?: number; contentFingerprint?: string; normalizedContent?: string; duplicateStatus?: 'UNIQUE' | 'DUPLICATE' | 'PUBLISHED_DUPLICATE'; duplicateOfItemId?: string;
 }
 export interface AutomationSession {
   id: string; workspaceId?: string; bankId?: string; bankUrl: string; status: SessionStatus; currentItemId?: string; currentIndex: number; total: number;
   startedAt?: number; scheduledStartAt?: number; pausedAt?: number; completedAt?: number; nextRunAt?: number; automationTabId?: number; timezone?: string;
-  intervalMinutes: number; maxRetries: number; failureBehavior: FailureBehavior; confirmBeforeStart: boolean;
+  intervalMinutes: number; maxRetries: number; failureBehavior: FailureBehavior; confirmBeforeStart: boolean; alarmFailureCount?: number; lastAlarmError?: string;
   keepAutomationTabOpen: boolean; closeTabOnComplete: boolean; version: number; updatedAt: number; historicalSessionId?: string;
 }
 export interface LegacyPublishAttempt {
@@ -37,7 +37,7 @@ export interface AppMetaState { schemaVersion: 2 | 3 | 4; activeWorkspaceId: str
 export interface AppMetadata { schemaVersion: 4; appVersion: string; activeWorkspaceId: string; automationWorkspaceId?: string; workspaceOrder: string[]; createdAt: number; updatedAt: number; }
 export interface GlobalSettings extends Settings { updatedAt: number; }
 export interface WorkspaceSettings { workspaceId: string; overrides: Partial<Omit<Settings, 'updatedAt'>>; createdAt: number; updatedAt: number; }
-export interface AutomationSessionRuntime { workspaceId: string; sessionId: string; bankId?: string; bankUrl?: string; status: SessionStatus; currentItemId?: string; currentIndex: number; total: number; startedAt?: number; scheduledStartAt?: number; pausedAt?: number; completedAt?: number; nextRunAt?: number; automationTabId?: number; alarmName?: string; operationId?: string; updatedAt: number; version: number; }
+export interface AutomationSessionRuntime { workspaceId: string; sessionId: string; bankId?: string; bankUrl?: string; status: SessionStatus; currentItemId?: string; currentIndex: number; total: number; startedAt?: number; scheduledStartAt?: number; pausedAt?: number; completedAt?: number; nextRunAt?: number; automationTabId?: number; alarmName?: string; operationId?: string; alarmFailureCount?: number; lastAlarmError?: string; updatedAt: number; version: number; }
 export interface AutomationSessionRecord extends HistoricalSession { scheduledStartAt?: number; timezone: string; }
 export interface BankSnapshot { id: string; bankId: string; workspaceId: string; capturedAt: number; items: BankSnapshotItem[]; }
 export interface PublishAttempt extends Omit<LegacyPublishAttempt, 'link' | 'action' | 'result' | 'error'> { targetUrl?: string; link?: string; action: string; result: string; error?: string; errorCode?: string; errorMessage?: string; durationMs?: number; adapter?: string; }

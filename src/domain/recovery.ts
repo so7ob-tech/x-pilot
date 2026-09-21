@@ -13,6 +13,16 @@ function getNextPendingItem(queue: QueueItem[], excludedItemId?: string): QueueI
 
 function recoverQueueItem(item: QueueItem, now: number): QueueItem {
   if (!interruptedStatuses.has(item.status)) return item;
+  if (item.status === 'PUBLISHING') {
+    return {
+      ...item,
+      status: 'PUBLISHED_UNVERIFIED',
+      publishedAt: item.publishedAt ?? now,
+      operationId: undefined,
+      lastError: item.lastError ?? 'PUBLISH_OUTCOME_UNVERIFIED_AFTER_RESTART',
+      updatedAt: now,
+    };
+  }
   return {
     ...item,
     status: 'PENDING',
@@ -30,6 +40,10 @@ export function normalizeRecovery(state: AppState, now = Date.now()): AppState {
   const next = getNextPendingItem(queue, current?.id);
 
   if (session.status === 'RUNNING') {
+    if (current?.status === 'PUBLISHED_UNVERIFIED') {
+      session = { ...session, status: 'PAUSED', pausedAt: now, nextRunAt: undefined, currentItemId: current.id, currentIndex: current.position, lastAlarmError: 'PUBLISH_OUTCOME_UNVERIFIED_AFTER_RESTART' };
+      return { ...state, queue, session };
+    }
     const resumable = current && !isTerminalItem(current.status) ? current : next;
     session = resumable
       ? { ...session, status: 'PAUSED', pausedAt: now, nextRunAt: undefined, currentItemId: resumable.id, currentIndex: resumable.position }
@@ -43,6 +57,11 @@ export function normalizeRecovery(state: AppState, now = Date.now()): AppState {
     session = next
       ? { ...session, currentItemId: next.id, currentIndex: next.position }
       : { ...session, status: 'COMPLETED', completedAt: now, nextRunAt: undefined, currentItemId: undefined };
+  } else if (session.status === 'SCHEDULED' && session.scheduledStartAt && session.scheduledStartAt <= now) {
+    const resumable = current && !isTerminalItem(current.status) ? current : next;
+    session = resumable
+      ? { ...session, status: 'PAUSED', pausedAt: now, scheduledStartAt: undefined, nextRunAt: undefined, currentItemId: resumable.id, currentIndex: resumable.position, lastAlarmError: 'SCHEDULED_START_MISSED_AFTER_RESTART' }
+      : { ...session, status: 'COMPLETED', completedAt: now, scheduledStartAt: undefined, nextRunAt: undefined, currentItemId: undefined };
   }
 
   return { ...state, queue, session };

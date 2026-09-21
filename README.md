@@ -1,6 +1,6 @@
 # X-Pilot
 
-> **v0.25.7:** تم توحيد حواف بطاقات الإعدادات والنسخ الاحتياطي وترتيب أزرارهما، مع تخطيط متجاوب للشاشات الضيقة.
+> **v0.25.8:** تم تنفيذ حزمة P0 لسلامة الأتمتة والبيانات: منع إعادة النشر غير المؤكد، قفل START، معالجة أخطاء Alarm، Restore transactional، واستعادة الجلسات المجدولة بعد Restart.
 
 <p align="center">
   <img src="public/branding/x-pilot-logo.png" alt="X-Pilot logo" width="180" />

@@ -7,10 +7,11 @@ import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
 import { getNextAllowedPublishingTime } from '../domain/scheduling';
+import { decideAlarmFailure } from '../domain/alarm-recovery';
 import { applyBulkStatus, reorderSelected } from '../domain/bulk-queue';
 import { shouldNeverRepublish } from '../domain/data-integrity.ts';
 import { getStoredLocale, formatDateTimeForLocale, translateForLocale } from '../i18n/translate.ts';
-import { addAttempt, archiveBank, claimAutomationOwner, clearWorkspaceProfile, createBank, createWorkspace, deleteBank, deleteWorkspace, exportBackup, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceSettings, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, restoreBank, restoreBackup, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceProfile, updateWorkspaceState, archiveWorkspace, restoreWorkspace, validateBackup } from '../storage/storage-repository';
+import { acquireStartLock, addAttempt, archiveBank, claimAutomationOwner, cleanupRestoreStaging, clearWorkspaceProfile, createBank, createWorkspace, deleteBank, deleteWorkspace, exportBackup, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceSettings, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, releaseStartLock, restoreBank, restoreBackup, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceProfile, updateWorkspaceState, archiveWorkspace, restoreWorkspace, validateBackup } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
 const SCHEDULE_ALARM_NAME = 'x-queue-scheduled-start';
@@ -405,8 +406,9 @@ async function processCurrentItem(): Promise<void> {
     const lockedItem = lockedState.queue.find((candidate) => candidate.id === item.id);
     if (!lockedItem || lockedItem.operationId !== operationId || lockedItem.status !== 'READY') throw new Error('ITEM_LOCK_LOST');
     await assertOperationActive(item.id, operationId);
-    await updateRuntimeState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'PUBLISHING', updatedAt: Date.now() } : candidate) }));
+    await updateRuntimeState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'PUBLISHING', publishIntentId: operationId, publishStartedAt: Date.now(), updatedAt: Date.now() } : candidate) }));
     const result = await chrome.tabs.sendMessage(tabId, { type: 'X_PUBLISH' });
+    await updateRuntimeState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id && candidate.publishIntentId === operationId ? { ...candidate, publishSubmittedAt: Date.now(), updatedAt: Date.now() } : candidate) }));
     await wait(1800);
     const after = await inspectTab(tabId);
     if (after.dailyPostLimitReached || after.reason === 'X_DAILY_POST_LIMIT_REACHED') throw new Error('X_DAILY_POST_LIMIT_REACHED');
@@ -418,7 +420,7 @@ async function processCurrentItem(): Promise<void> {
     const nextStatus = nextItem ? 'WAITING' : 'COMPLETED';
     const nextState = await updateRuntimeState((current) => ({
       ...current,
-      queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: finalStatus, publishedAt: finishedAt, updatedAt: finishedAt, operationId: undefined } : candidate),
+      queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: finalStatus, publishedAt: finishedAt, updatedAt: finishedAt, operationId: undefined, publishIntentId: undefined, publishStartedAt: undefined, publishSubmittedAt: undefined } : candidate),
       session: current.session ? { ...current.session, status: nextStatus, currentItemId: nextItem?.id, currentIndex: nextItem?.position ?? current.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? finishedAt : current.session.completedAt, updatedAt: finishedAt } : null,
       history: [...current.history, { id: crypto.randomUUID(), workspaceId: current.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, timestamp: finishedAt, attemptNumber: item.attempts + 1, action: 'PUBLISH', result: finalStatus }]
     }));
@@ -463,6 +465,23 @@ async function processCurrentItem(): Promise<void> {
     }
     const current = await getState();
     const latestItem = current.queue.find((candidate) => candidate.id === item.id);
+    if (latestItem?.status === 'PUBLISHING' && latestItem.publishIntentId === operationId && message !== 'X_DAILY_POST_LIMIT_REACHED') {
+      const uncertainAt = Date.now();
+      const uncertain = await updateRuntimeState((currentState) => ({
+        ...currentState,
+        queue: currentState.queue.map((candidate) => candidate.id === item.id && candidate.publishIntentId === operationId
+          ? { ...candidate, status: 'PUBLISHED_UNVERIFIED', publishedAt: candidate.publishedAt ?? uncertainAt, lastError: 'PUBLISH_OUTCOME_UNVERIFIED', operationId: undefined, updatedAt: uncertainAt }
+          : candidate),
+        session: currentState.session ? { ...currentState.session, status: 'PAUSED', currentItemId: item.id, nextRunAt: undefined, updatedAt: uncertainAt } : null,
+        history: [...currentState.history, { id: crypto.randomUUID(), workspaceId: currentState.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, timestamp: uncertainAt, attemptNumber: item.attempts, action: 'PUBLISH', result: 'PUBLISHED_UNVERIFIED', error: 'PUBLISH_OUTCOME_UNVERIFIED' }]
+      }));
+      await syncHistoricalSession(uncertain, 'PAUSED', 'PUBLISH_OUTCOME_UNVERIFIED');
+      await chrome.alarms.clear(ALARM_NAME);
+      await restoreActiveTab(previousActiveTabId);
+      await notifyEvent('X-Pilot: مطلوب تدخل', 'نتيجة النشر غير مؤكدة. تم إيقاف الجلسة لمنع إعادة النشر.');
+      await broadcast(uncertain);
+      return;
+    }
     if (current.session?.status !== 'RUNNING' || latestItem?.operationId !== operationId) {
       await restoreActiveTab(previousActiveTabId);
       return;
@@ -835,28 +854,35 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     case 'START': {
       const meta = await getMeta();
       const workspaceId = message.workspaceId ?? meta.activeWorkspaceId;
-      const preflight = await performPreflight(workspaceId);
-      if (!preflight.ready) { await notifyEvent('X-Pilot: فشل فحص الجاهزية', preflight.summaryKey); throw new Error(`PREFLIGHT_FAILED:${preflight.summaryKey}`); }
-      await claimAutomationOwner(workspaceId);
-      const settings = await getWorkspaceSettings(workspaceId);
-      const state = await updateRuntimeState((current) => {
-        const firstItem = current.queue.find((item) => canStartItem(item.status) && !item.duplicateStatus?.includes('PUBLISHED'));
-        const currentItem = current.session?.currentItemId && current.queue.some((item) => item.id === current.session?.currentItemId && canStartItem(item.status))
-          ? current.session.currentItemId
-          : firstItem?.id;
-        const session: AutomationSession = current.session ?? {
-          id: crypto.randomUUID(), workspaceId, bankUrl: '', ...settings,
-          status: 'RUNNING' as const, currentIndex: firstItem?.position ?? 0, total: current.queue.length, version: 1, updatedAt: Date.now(),
-        };
-        return { ...current, session: { ...session, ...settings, workspaceId, status: 'RUNNING', startedAt: session.startedAt ?? Date.now(), currentItemId: currentItem, currentIndex: current.queue.find((item) => item.id === currentItem)?.position ?? session.currentIndex, total: current.queue.length, updatedAt: Date.now() } };
-      });
-      if (state.workspaceId && state.session && !state.session.historicalSessionId) {
-        const historical = createHistoricalSession(state.session, state.queue);
-        await saveHistoricalSession(state.workspaceId, historical);
-        const linked = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, historicalSessionId: historical.id, updatedAt: Date.now() } : null }));
-        await broadcast(linked); await processCurrentItem(); return getState();
+      const startToken = await acquireStartLock(workspaceId);
+      try {
+        const existing = await getWorkspaceState(workspaceId);
+        if (existing.session && ['RUNNING', 'WAITING', 'PAUSED', 'SCHEDULED'].includes(existing.session.status)) throw new Error('START_ALREADY_ACTIVE');
+        const preflight = await performPreflight(workspaceId);
+        if (!preflight.ready) { await notifyEvent('X-Pilot: فشل فحص الجاهزية', preflight.summaryKey); throw new Error(`PREFLIGHT_FAILED:${preflight.summaryKey}`); }
+        await claimAutomationOwner(workspaceId);
+        const settings = await getWorkspaceSettings(workspaceId);
+        const state = await updateRuntimeState((current) => {
+          const firstItem = current.queue.find((item) => canStartItem(item.status) && !item.duplicateStatus?.includes('PUBLISHED'));
+          const currentItem = current.session?.currentItemId && current.queue.some((item) => item.id === current.session?.currentItemId && canStartItem(item.status))
+            ? current.session.currentItemId
+            : firstItem?.id;
+          const session: AutomationSession = current.session ?? {
+            id: crypto.randomUUID(), workspaceId, bankUrl: '', ...settings,
+            status: 'RUNNING' as const, currentIndex: firstItem?.position ?? 0, total: current.queue.length, version: 1, updatedAt: Date.now(),
+          };
+          return { ...current, session: { ...session, ...settings, workspaceId, status: 'RUNNING', startedAt: session.startedAt ?? Date.now(), currentItemId: currentItem, currentIndex: current.queue.find((item) => item.id === currentItem)?.position ?? session.currentIndex, total: current.queue.length, updatedAt: Date.now() } };
+        });
+        if (state.workspaceId && state.session && !state.session.historicalSessionId) {
+          const historical = createHistoricalSession(state.session, state.queue);
+          await saveHistoricalSession(state.workspaceId, historical);
+          const linked = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, historicalSessionId: historical.id, updatedAt: Date.now() } : null }));
+          await broadcast(linked); await processCurrentItem(); return getState();
+        }
+        await broadcast(state); await processCurrentItem(); return getState();
+      } finally {
+        await releaseStartLock(startToken);
       }
-      await broadcast(state); await processCurrentItem(); return getState();
     }
     case 'PAUSE': {
       await chrome.alarms.clear(ALARM_NAME);
@@ -902,7 +928,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       return result;
     }
     case 'SKIP_CURRENT': return commitQueueMutation((state) => ({ ...state, queue: state.queue.map((item) => item.id === state.session?.currentItemId ? { ...item, status: 'SKIPPED', updatedAt: Date.now() } : item) }));
-    case 'RETRY_ITEM': return commitQueueMutation((state) => ({ ...state, queue: state.queue.map((item) => item.id === message.itemId ? { ...item, status: 'PENDING', attempts: 0, lastError: undefined, updatedAt: Date.now() } : item) }));
+    case 'RETRY_ITEM': return commitQueueMutation((state) => ({ ...state, queue: state.queue.map((item) => item.id === message.itemId ? { ...item, status: 'PENDING', attempts: 0, lastError: undefined, publishedAt: undefined, publishIntentId: undefined, publishStartedAt: undefined, publishSubmittedAt: undefined, updatedAt: Date.now() } : item) }));
     case 'DELETE_ITEM': return commitQueueMutation((state) => ({ ...state, queue: state.queue.filter((item) => item.id !== message.itemId).map((item, index) => ({ ...item, position: index + 1 })) }));
     case 'CLEAR_COMPLETED': return commitQueueMutation((state) => ({ ...state, queue: state.queue.filter((item) => !isTerminalItem(item.status)).map((item, index) => ({ ...item, position: index + 1 })) }));
     case 'BULK_ACTION': return executeBulkAction(message.workspaceId ?? (await getMeta()).activeWorkspaceId, message.action, message.itemIds, message.confirmed, message.bankId);
@@ -911,18 +937,46 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
 }
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => { handleMessage(message).then(sendResponse).catch((error) => sendResponse({ error: error instanceof Error ? error.message : 'UNKNOWN_ERROR' })); return true; });
-chrome.alarms.onAlarm.addListener((alarm) => {
-  void getState().then((state) => {
+async function handleAlarmFailure(alarmName: string, error: unknown): Promise<void> {
+  const message = error instanceof Error ? error.message : 'ALARM_HANDLER_FAILED';
+  console.error('X-Pilot alarm handler failed', { alarmName, message });
+  try {
+    const state = await getState();
     const session = state.session;
-    if (alarm.name === ALARM_NAME && session?.status === 'WAITING') {
-      if (session.nextRunAt && session.nextRunAt > Date.now()) return;
-      void advanceSession();
+    if (!session || !['WAITING', 'SCHEDULED'].includes(session.status)) return;
+    const alarmStatus = session.status === 'SCHEDULED' ? 'SCHEDULED' : 'WAITING';
+    const retryAt = alarmStatus === 'WAITING' ? session.nextRunAt : session.scheduledStartAt;
+    const decision = decideAlarmFailure(alarmStatus, retryAt, session.alarmFailureCount ?? 0, Date.now());
+    if (decision.action === 'RETRY') {
+      await chrome.alarms.create(decision.alarmName, { when: decision.when, persistAcrossSessions: true });
+      const retried = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, alarmFailureCount: decision.failureCount, lastAlarmError: message, updatedAt: Date.now() } : null }));
+      await notifyEvent('X-Pilot: فشل مؤقت', `فشل Alarm وسيُعاد المحاولة (${decision.failureCount}/3).`);
+      await broadcast(retried);
+      return;
     }
-    if (alarm.name === SCHEDULE_ALARM_NAME && session?.status === 'SCHEDULED') {
-      if (session.scheduledStartAt && session.scheduledStartAt > Date.now()) return;
-      void handleScheduledStart();
-    }
-  }).catch(() => undefined);
-});
-chrome.runtime.onStartup.addListener(() => { void recoverPersistedState(); });
-chrome.runtime.onInstalled.addListener(() => { void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); void recoverPersistedState(); });
+    const failed = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'FAILED', nextRunAt: undefined, scheduledStartAt: undefined, alarmFailureCount: decision.failureCount, lastAlarmError: message, updatedAt: Date.now() } : null }));
+    await chrome.alarms.clear(alarmName);
+    if (failed.workspaceId) await releaseAutomationOwner(failed.workspaceId);
+    await notifyEvent('X-Pilot: فشل الجدولة', 'تعذر تنفيذ Alarm بعد محاولات محدودة. راجع الجلسة ثم أعد التشغيل يدويًا.');
+    await broadcast(failed);
+  } catch (fallbackError) {
+    console.error('X-Pilot alarm failure recovery failed', fallbackError);
+  }
+}
+
+async function handleAlarm(alarm: chrome.alarms.Alarm): Promise<void> {
+  const state = await getState();
+  const session = state.session;
+  if (alarm.name === ALARM_NAME && session?.status === 'WAITING') {
+    if (session.nextRunAt && session.nextRunAt > Date.now()) return;
+    await advanceSession();
+  }
+  if (alarm.name === SCHEDULE_ALARM_NAME && session?.status === 'SCHEDULED') {
+    if (session.scheduledStartAt && session.scheduledStartAt > Date.now()) return;
+    await handleScheduledStart();
+  }
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => { void handleAlarm(alarm).catch((error) => handleAlarmFailure(alarm.name, error)); });
+chrome.runtime.onStartup.addListener(() => { void cleanupRestoreStaging().then(recoverPersistedState).catch((error) => console.error('X-Pilot startup recovery failed', error)); });
+chrome.runtime.onInstalled.addListener(() => { void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); void cleanupRestoreStaging().then(recoverPersistedState).catch((error) => console.error('X-Pilot install recovery failed', error)); });
