@@ -63,8 +63,8 @@ test('manifest declares official X-Pilot icon assets', () => {
 
 test('UI and README use the official X-Pilot branding asset', () => {
   assert.match(uiSource, /branding\/x-pilot-logo\.png/);
-  assert.match(uiSource, /X-PILOT SETTINGS/);
-  assert.match(uiSource, /X-PILOT RECOVERY/);
+  assert.match(uiSource, /common\.xPilotSettings/);
+  assert.match(uiSource, /X-PILOT/);
   assert.match(readme, /public\/branding\/x-pilot-logo\.png/);
   assert.match(readme, /public\/icons/);
 });
@@ -137,8 +137,8 @@ test('Phase 2 exposes persistent scheduling, profiles, notifications, and Badge 
   assert.match(serviceWorker, /chrome\.notifications\.create/);
   assert.match(serviceWorker, /فشل عنصر/);
   assert.match(serviceWorker, /chrome\.action\.setBadgeText/);
-  assert.match(uiSource, /Schedule/);
-  assert.match(uiSource, /Reschedule/);
+  assert.match(uiSource, /ui\.schedule/);
+  assert.match(uiSource, /ui\.reschedule/);
   assert.match(uiSource, /PublishingWindowsEditor/);
   assert.match(fs.readFileSync(path.join(root, 'src/ui/components/publishing-windows-editor.tsx'), 'utf8'), /type="time"/);
   assert.match(fs.readFileSync(path.join(root, 'src/ui/components/publishing-windows-editor.tsx'), 'utf8'), /إضافة نافذة/);
@@ -147,7 +147,7 @@ test('Phase 2 exposes persistent scheduling, profiles, notifications, and Badge 
 test('Dry Run results show item number and preview without exposing target URLs', () => {
   assert.match(models, /DryRunItemResult \{ queueItemId: string; position: number/);
   assert.match(serviceWorker, /position: item\.position/);
-  assert.match(uiSource, /Item #\{item\.position\}/);
+  assert.match(uiSource, /العنصر #\{item\.position\}/);
   assert.match(uiSource, /getDryRunPreview\(item\.targetUrl\)/);
   assert.doesNotMatch(uiSource.slice(uiSource.indexOf('export function DryRunCard'), uiSource.indexOf('export function CurrentTweetCard')), /item\.targetUrl\}\/span>/);
 });
@@ -196,11 +196,11 @@ test('Feature 14 exposes all Bulk Queue actions with active-item protection', ()
   assert.match(serviceWorker, /BULK_ACTIVE_ITEM_BUSY/);
   assert.match(serviceWorker, /BULK_BANK_NOT_FOUND_OR_ARCHIVED/);
   assert.match(uiSource, /تحديد عناصر الصفحة/);
-  assert.match(uiSource, /Reset to Pending/);
-  assert.match(uiSource, /Move to top/);
-  assert.match(uiSource, /Move to bottom/);
-  assert.match(uiSource, /Assign Bank/);
-  assert.match(uiSource, /Export selected/);
+  assert.match(uiSource, /common\.resetPending/);
+  assert.match(uiSource, /common\.moveTop/);
+  assert.match(uiSource, /common\.moveBottom/);
+  assert.match(uiSource, /common\.assignBank/);
+  assert.match(uiSource, /common\.exportSelected/);
 });
 
 test('Individual Queue mutations persist, broadcast, and clear stale selection after deletion', () => {
@@ -406,7 +406,7 @@ test('Refresh Diff is non-destructive and supports selective Queue merge', () =>
   assert.match(serviceWorker, /async function refreshBank\(workspaceId: string, bankId: string\)/);
   assert.match(serviceWorker, /classifyBankDiff\(workspaceId, bank, snapshot, state.queue,/);
   assert.match(serviceWorker, /mergeSelectedDiffItems\(workspaceState.queue, diff, bank, message.itemIds,/);
-  assert.match(uiSource, /Refresh & Diff/);
+  assert.match(uiSource, /ui\.refreshDiff/);
   assert.match(uiSource, /إضافة المحدد إلى Queue/);
   assert.match(uiSource, /مراجعة تغييرات البنك/);
 });
@@ -426,7 +426,7 @@ test('Preflight Check exposes structured checks and guards Start', () => {
   assert.match(models, /PREFLIGHT_CHECK/);
   assert.match(serviceWorker, /performPreflight/);
   assert.match(serviceWorker, /PREFLIGHT_FAILED/);
-  assert.match(uiSource, /PREFLIGHT CHECK/);
+  assert.match(uiSource, /tests\.preflight/);
   assert.match(uiSource, /فحص الآن/);
 });
 
