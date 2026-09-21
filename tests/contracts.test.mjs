@@ -129,7 +129,9 @@ test('Phase 2 exposes persistent scheduling, profiles, notifications, and Badge 
   assert.match(serviceWorker, /chrome\.action\.setBadgeText/);
   assert.match(uiSource, /Schedule/);
   assert.match(uiSource, /Reschedule/);
-  assert.match(uiSource, /Publishing Windows JSON/);
+  assert.match(uiSource, /PublishingWindowsEditor/);
+  assert.match(fs.readFileSync(path.join(root, 'src/ui/components/publishing-windows-editor.tsx'), 'utf8'), /type="time"/);
+  assert.match(fs.readFileSync(path.join(root, 'src/ui/components/publishing-windows-editor.tsx'), 'utf8'), /إضافة نافذة/);
 });
 
 test('Dry Run results show item number and preview without exposing target URLs', () => {

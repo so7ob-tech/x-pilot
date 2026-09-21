@@ -228,6 +228,29 @@ button.danger:hover, .ui-button-danger:hover { border-color: #df9c99; }
 .extract-options { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
 .extract-options label { display: inline-flex; align-items: center; gap: 5px; margin-top: 0; font-size: 11px; }
 .schedule-controls, .profile-actions, .backup-actions { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border: 1px solid var(--color-border); }
+.publishing-windows-editor { display: grid; gap: 10px; margin-top: 14px; padding: 13px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+.publishing-windows-heading, .publishing-window-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.publishing-windows-heading h3 { margin: 0; }
+.publishing-windows-heading .muted { margin: 4px 0 0; font-size: 11px; }
+.publishing-windows-empty { display: grid; gap: 4px; padding: 12px; border: 1px dashed var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-2); font-size: 11px; }
+.publishing-windows-empty strong { color: var(--color-success); }
+.publishing-window-list { display: grid; gap: 8px; }
+.publishing-window-row { display: grid; gap: 9px; padding: 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); }
+.publishing-window-row.disabled { opacity: .58; }
+.window-toggle { display: inline-flex; align-items: center; gap: 5px; margin: 0 auto 0 0; font-size: 10px; }
+.window-toggle input { width: auto; margin: 0; }
+.window-delete { min-height: 28px; padding: 5px 8px; font-size: 10px; }
+.day-picker { display: flex; flex-wrap: wrap; gap: 5px; }
+.day-picker button { min-width: 33px; min-height: 29px; padding: 5px 7px; border-radius: 999px; font-size: 10px; }
+.day-picker button.selected { color: #fff; border-color: var(--color-primary); background: var(--color-primary); }
+.window-times { display: flex; align-items: end; gap: 8px; }
+.window-times label { flex: 1; margin: 0; }
+.window-times input { margin-top: 4px; padding: 7px 8px; }
+.window-times > span { padding-bottom: 9px; color: var(--color-text-3); }
+.window-error, .window-success { margin: 0; font-size: 11px; }
+.window-error { color: var(--color-danger); }
+.window-success { color: var(--color-success); }
+.publishing-windows-save { width: 100%; }
 
 .analytics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-bottom: 14px; }
 .analytics-metric { min-width: 0; padding: 12px 9px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); text-align: center; }
