@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from 'react';
-import { ar } from './ar.ts';
-import { en } from './en.ts';
 import type { LanguagePreference, Locale, TranslationTree } from './types.ts';
+import { formatDateTimeForLocale, localeFromLanguage, translateForLocale } from './translate.ts';
 
 export type { LanguagePreference, Locale } from './types';
+export { translateForLocale, localeFromLanguage } from './translate.ts';
+export { formatDateTimeForLocale } from './translate.ts';
 export const UI_PREFERENCES_KEY = 'xPilotUiPreferences';
 
 let preference: LanguagePreference = 'AUTO';
@@ -22,7 +23,7 @@ function browserLanguage(): string {
 export function resolveLocale(value: LanguagePreference, language = browserLanguage()): Locale {
   if (value === 'AR') return 'ar';
   if (value === 'EN') return 'en';
-  return language.toLowerCase().startsWith('ar') ? 'ar' : 'en';
+  return localeFromLanguage(language);
 }
 
 export function applyLocale(next: Locale): void {
@@ -55,10 +56,21 @@ export async function setLanguagePreference(next: LanguagePreference): Promise<v
   applyLocale(resolveLocale(next));
 }
 
-function dictionary(): TranslationTree { return locale === 'ar' ? ar : en; }
-function lookup(path: string): string { return path.split('.').reduce<unknown>((value, part) => (value as Record<string, unknown>)?.[part], dictionary()) as string || path; }
 export function translate(path: string, variables: Record<string, string | number> = {}): string {
-  return Object.entries(variables).reduce((text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)), lookup(path));
+  return translateForLocale(locale, path, variables);
+}
+
+export function formatDateTime(value: number | Date | string, currentLocale = locale): string {
+  return formatDateTimeForLocale(value, currentLocale);
+}
+export function formatDate(value: number | Date | string, currentLocale = locale): string {
+  return new Intl.DateTimeFormat(currentLocale === 'ar' ? 'ar-YE' : 'en-US', { dateStyle: 'medium' }).format(new Date(value));
+}
+export function formatTime(value: number | Date | string, currentLocale = locale): string {
+  return new Intl.DateTimeFormat(currentLocale === 'ar' ? 'ar-YE' : 'en-US', { timeStyle: 'short' }).format(new Date(value));
+}
+export function formatNumber(value: number, currentLocale = locale): string {
+  return new Intl.NumberFormat(currentLocale === 'ar' ? 'ar-YE' : 'en-US').format(value);
 }
 
 export function useI18n() {

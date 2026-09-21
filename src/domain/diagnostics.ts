@@ -11,3 +11,7 @@ export function diagnosticsSummary(result: DiagnosticsResult): string {
   const status = diagnosticsStatus(result.checks);
   return status === 'OK' ? 'Diagnostics: OK' : status === 'WARN' ? 'Diagnostics: WARN' : status === 'FAIL' ? 'Diagnostics: FAIL' : 'Diagnostics: NOT_CHECKED';
 }
+
+export function diagnosticsSummaryKey(result: DiagnosticsResult): string {
+  return `diagnostics.summary.${diagnosticsStatus(result.checks)}`;
+}

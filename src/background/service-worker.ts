@@ -9,6 +9,7 @@ import { extractLinksFromValues } from '../extraction/bank-parser';
 import { getNextAllowedPublishingTime } from '../domain/scheduling';
 import { applyBulkStatus, reorderSelected } from '../domain/bulk-queue';
 import { shouldNeverRepublish } from '../domain/data-integrity.ts';
+import { getStoredLocale, formatDateTimeForLocale, translateForLocale } from '../i18n/translate.ts';
 import { addAttempt, archiveBank, claimAutomationOwner, clearWorkspaceProfile, createBank, createWorkspace, deleteBank, deleteWorkspace, exportBackup, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceSettings, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, restoreBank, restoreBackup, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceProfile, updateWorkspaceState, archiveWorkspace, restoreWorkspace, validateBackup } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
@@ -79,7 +80,27 @@ async function getRuntimeStatus(): Promise<RuntimeStatus> {
 async function notifyEvent(title: string, message: string): Promise<void> {
   const settings = await getSettings();
   if (!settings.notificationsEnabled || !chrome.notifications) return;
-  await chrome.notifications.create(`x-pilot-${Date.now()}`, { type: 'basic', iconUrl: 'icons/icon128.png', title, message });
+  const locale = await getStoredLocale();
+  const titleKeys: Record<string, string> = {
+    'X-Pilot: اكتملت الجلسة': 'notifications.sessionCompletedTitle',
+    'X-Pilot: مطلوب تدخل': 'notifications.interventionTitle',
+    'X-Pilot: فشل عنصر': 'notifications.failedItemTitle',
+    'X-Pilot: جلسة مجدولة': 'notifications.scheduledTitle',
+    'X-Pilot: بدأت الجلسة': 'notifications.startedTitle',
+    'X-Pilot: تحدٍ أمني': 'notifications.challenge',
+    'X-Pilot: خارج نافذة النشر': 'notifications.outsideWindow',
+    'X-Pilot: فشل فحص الجاهزية': 'notifications.preflightFailed',
+    'X-Pilot: توقفت Queue مؤقتًا': 'notifications.paused',
+  };
+  const messageKeys: Record<string, string> = {
+    'اكتملت جميع عناصر Queue.': 'notifications.sessionCompletedMessage',
+    'تسجيل الدخول إلى X مطلوب.': 'notifications.loginRequired',
+    'تم اكتشاف CAPTCHA أو Challenge وتوقفت الجلسة.': 'notifications.challenge',
+  };
+  const translatedTitle = titleKeys[title] ? translateForLocale(locale, titleKeys[title]) : title;
+  let translatedMessage = messageKeys[message] ? translateForLocale(locale, messageKeys[message]) : message;
+  translatedMessage = translatedMessage.replace(/سيستأنف النشر في (.+)$/u, (_, value) => `${translateForLocale(locale, 'notifications.outsideWindow')}: ${formatDateTimeForLocale(value, locale)}`);
+  await chrome.notifications.create(`x-pilot-${Date.now()}`, { type: 'basic', iconUrl: 'icons/icon128.png', title: translatedTitle, message: translatedMessage });
 }
 
 async function updateBadge(state?: AppState): Promise<void> {
@@ -609,7 +630,7 @@ async function performPreflight(workspaceId: string) {
 async function scheduleSession(workspaceId: string, startAt: number): Promise<AppState> {
   if (!Number.isFinite(startAt) || startAt <= Date.now()) throw new Error('SCHEDULE_START_MUST_BE_IN_FUTURE');
   const preflight = await performPreflight(workspaceId);
-  if (!preflight.ready) { await notifyEvent('X-Pilot: فشل فحص الجاهزية', preflight.summary); throw new Error(`PREFLIGHT_FAILED:${preflight.summary}`); }
+  if (!preflight.ready) { await notifyEvent('X-Pilot: فشل فحص الجاهزية', preflight.summaryKey); throw new Error(`PREFLIGHT_FAILED:${preflight.summaryKey}`); }
   await claimAutomationOwner(workspaceId);
   const settings = await getWorkspaceSettings(workspaceId);
   const scheduled = await updateWorkspaceState(workspaceId, (current) => ({
@@ -815,7 +836,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       const meta = await getMeta();
       const workspaceId = message.workspaceId ?? meta.activeWorkspaceId;
       const preflight = await performPreflight(workspaceId);
-      if (!preflight.ready) { await notifyEvent('X-Pilot: فشل فحص الجاهزية', preflight.summary); throw new Error(`PREFLIGHT_FAILED:${preflight.summary}`); }
+      if (!preflight.ready) { await notifyEvent('X-Pilot: فشل فحص الجاهزية', preflight.summaryKey); throw new Error(`PREFLIGHT_FAILED:${preflight.summaryKey}`); }
       await claimAutomationOwner(workspaceId);
       const settings = await getWorkspaceSettings(workspaceId);
       const state = await updateRuntimeState((current) => {
