@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { ar } from '../src/i18n/ar.ts';
 import { en } from '../src/i18n/en.ts';
+import { translateForLocale } from '../src/i18n/translate.ts';
 import { runPreflight } from '../src/domain/preflight.ts';
 
 function flatten(value, prefix = '', output = new Map()) {
@@ -36,5 +37,21 @@ test('Preflight domain output is language-neutral and renderable in both locales
   for (const check of result.checks) {
     assert.equal(typeof check.messageKey, 'string');
     assert.equal(typeof check.status, 'string');
+  }
+});
+
+test('reported Queue, session, history, analytics, workspace, and settings labels resolve in both locales', () => {
+  const keys = [
+    'ui.remaining', 'banks.hint', 'sessions.eyebrow', 'sessions.count', 'sessions.noMatch',
+    'history.eyebrow', 'history.count', 'history.noMatch', 'analytics.eyebrow',
+    'analytics.derivedHint', 'analytics.totalWorkspaces', 'analytics.totalPublished',
+    'analytics.totalFailures', 'analytics.sessionsOverTime', 'analytics.workspaceComparison',
+    'analytics.noSessions', 'workspaces.activeSummary', 'settings.badge', 'backup.hint',
+  ];
+  for (const locale of ['ar', 'en']) {
+    for (const key of keys) {
+      const value = translateForLocale(locale, key, { visible: 0, total: 0, name: 'Test' });
+      assert.notEqual(value, key, `${locale} has no translation for ${key}`);
+    }
   }
 });

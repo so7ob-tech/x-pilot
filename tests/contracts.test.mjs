@@ -224,13 +224,13 @@ test('Start creates a session when missing and automation-tab failure cannot lea
 
 test('Feature 15 exposes derived Workspace and global Analytics Dashboard metrics', () => {
   assert.match(uiSource, /AnalyticsTab/);
-  assert.match(uiSource, /Total sessions/);
-  assert.match(uiSource, /Success Rate/);
-  assert.match(uiSource, /Average session duration/);
-  assert.match(uiSource, /Most active bank/);
-  assert.match(uiSource, /Total Workspaces/);
-  assert.match(uiSource, /Sessions over time/);
-  assert.match(uiSource, /ولا يتم تخزين إحصاءات مكررة/);
+  assert.match(uiSource, /analytics\.totalSessions/);
+  assert.match(uiSource, /analytics\.successRate/);
+  assert.match(uiSource, /analytics\.duration/);
+  assert.match(uiSource, /analytics\.mostActiveBank/);
+  assert.match(uiSource, /analytics\.totalWorkspaces/);
+  assert.match(uiSource, /analytics\.sessionsOverTime/);
+  assert.match(uiSource, /analytics\.derivedHint/);
   assert.match(uiSource, /calculateGlobalAnalytics/);
   assert.match(uiSource, /calculateWorkspaceAnalytics/);
 });
