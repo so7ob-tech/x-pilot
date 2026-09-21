@@ -315,7 +315,16 @@ button.danger:hover, .ui-button-danger:hover { border-color: #df9c99; }
 .history-row:last-child { border-bottom: 0; }
 .history-row small { display: block; margin-top: 3px; color: var(--color-text-3); }
 .history-counts { display: flex; gap: 8px; color: var(--color-text-2); font-size: 11px; white-space: nowrap; }
-.settings-card textarea { min-height: 78px; resize: vertical; font-family: ui-monospace, monospace; font-size: 11px; }
+.settings-card { display: grid; gap: 14px; }
+.settings-card > label { margin-top: 0; }
+.settings-card .publishing-windows-editor, .settings-card .profile-actions, .settings-card .backup-actions { margin-top: 0; padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+.settings-card .profile-actions, .settings-card .backup-actions { display: grid; gap: 10px; }
+.settings-card .profile-actions h3, .settings-card .backup-actions h3, .settings-card .profile-actions p, .settings-card .backup-actions p { margin-bottom: 0; }
+.settings-card .profile-actions h3, .settings-card .profile-actions p, .settings-card .backup-actions h3, .settings-card .backup-actions p { grid-column: 1 / -1; }
+.settings-card .profile-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.settings-card .profile-actions button, .settings-card .backup-actions button, .settings-card .backup-actions .button-like { width: 100%; min-width: 0; }
+.settings-card .backup-actions .controls-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.settings-card .button-like { margin-top: 0; }
 .button-like input { display: none; }
 .empty-state { display: grid; justify-items: center; gap: 8px; padding: 30px 15px; color: var(--color-text-2); text-align: center; }
 .empty-state p { max-width: 280px; margin: 0; color: var(--color-text-3); font-size: 12px; }
@@ -334,6 +343,7 @@ footer { margin: 18px 2px 6px; }
   .analytics-detail { grid-template-columns: 1fr; }
   .bank-row { align-items: stretch; flex-direction: column; }
   .bank-row button { width: 100%; }
+  .settings-card .profile-actions, .settings-card .backup-actions .controls-row { grid-template-columns: 1fr; }
   .premium-switcher select { display: none; }
 }
 
