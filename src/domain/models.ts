@@ -25,7 +25,11 @@ export interface HistoricalSession {
 }
 export interface AppState { workspaceId?: string; queue: QueueItem[]; session: AutomationSession | null; history: PublishAttempt[]; }
 export interface Workspace { id: string; name: string; description: string; color?: string; icon?: string; favorite: boolean; archived: boolean; createdAt: number; updatedAt: number; lastActivityAt: number; }
-export interface TweetBank { id: string; workspaceId: string; name: string; description?: string; url: string; favorite: boolean; archived: boolean; createdAt: number; updatedAt: number; lastExtractedAt?: number; lastExtractedCount?: number; }
+export interface TweetBank { id: string; workspaceId: string; name: string; description?: string; url: string; favorite: boolean; archived: boolean; createdAt: number; updatedAt: number; lastExtractedAt?: number; lastExtractedCount?: number; lastSnapshot?: BankSnapshotItem[]; lastSnapshotAt?: number; }
+export interface BankSnapshotItem { url: string; label?: string; }
+export type BankDiffCategory = 'NEW' | 'EXISTING' | 'PREVIOUSLY_PUBLISHED' | 'REMOVED' | 'INVALID';
+export interface BankDiffItem extends BankSnapshotItem { id: string; category: BankDiffCategory; existingQueueItemId?: string; reason?: string; }
+export interface BankDiffResult { workspaceId: string; bankId: string; refreshedAt: number; items: BankDiffItem[]; selectedNewIds: string[]; }
 export interface WorkspaceState extends AppState { workspaceId: string; workspace: Workspace; banks: TweetBank[]; historicalSessions: HistoricalSession[]; }
 export interface Settings { intervalMinutes: number; maxRetries: number; failureBehavior: FailureBehavior; confirmBeforeStart: boolean; keepAutomationTabOpen: boolean; closeTabOnComplete: boolean; }
 export interface AppMetaState { schemaVersion: 2 | 3; activeWorkspaceId: string; automationWorkspaceId?: string; workspaceOrder: string[]; globalSettings: Settings; }
@@ -40,7 +44,7 @@ export type RuntimeMessage =
   | { type: 'SET_ACTIVE_WORKSPACE'; workspaceId: string } | { type: 'GET_RUNTIME_STATUS' } | { type: 'GET_BANKS'; workspaceId?: string }
   | { type: 'CREATE_BANK'; workspaceId?: string; name: string; url: string; description?: string } | { type: 'UPDATE_BANK'; workspaceId?: string; bankId: string; patch: Partial<Pick<TweetBank, 'name' | 'description' | 'url' | 'favorite'>> }
   | { type: 'ARCHIVE_BANK'; workspaceId?: string; bankId: string } | { type: 'RESTORE_BANK'; workspaceId?: string; bankId: string } | { type: 'DELETE_BANK'; workspaceId?: string; bankId: string; confirmed: boolean }
-  | { type: 'EXTRACT_BANK'; bankId?: string; bankUrl: string; workspaceId?: string; mode?: 'REPLACE' | 'APPEND' }
+  | { type: 'EXTRACT_BANK'; bankId?: string; bankUrl: string; workspaceId?: string; mode?: 'REPLACE' | 'APPEND' } | { type: 'REFRESH_BANK'; workspaceId?: string; bankId: string } | { type: 'GET_BANK_DIFF'; workspaceId?: string; bankId: string } | { type: 'ADD_DIFF_ITEMS'; workspaceId?: string; bankId: string; itemIds: string[] } | { type: 'DISCARD_BANK_DIFF'; workspaceId?: string; bankId: string }
   | { type: 'START'; confirmed?: boolean; workspaceId?: string } | { type: 'PAUSE'; workspaceId?: string } | { type: 'RESUME'; workspaceId?: string } | { type: 'STOP'; workspaceId?: string }
   | { type: 'SKIP_CURRENT' } | { type: 'RETRY_ITEM'; itemId: string } | { type: 'REORDER'; itemId: string; direction: 'up' | 'down' } | { type: 'DELETE_ITEM'; itemId: string } | { type: 'CLEAR_COMPLETED' } | { type: 'UPDATE_SETTINGS'; settings: Settings; workspaceId?: string };
 export type ContentMessage = { type: 'X_INSPECT' } | { type: 'X_PUBLISH' };

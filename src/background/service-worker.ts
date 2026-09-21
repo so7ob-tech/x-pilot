@@ -1,11 +1,13 @@
-import type { AppState, AutomationSession, ContentInspection, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
+import type { AppState, AutomationSession, BankDiffResult, BankSnapshotItem, ContentInspection, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
 import { createHistoricalSession, defaultSettings } from '../domain/models';
+import { classifyBankDiff, mergeSelectedDiffItems } from '../domain/bank-diff';
 import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
 import { addAttempt, archiveBank, claimAutomationOwner, createBank, createWorkspace, deleteBank, deleteWorkspace, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, restoreBank, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceState, archiveWorkspace, restoreWorkspace } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
+const bankDiffs = new Map<string, BankDiffResult>();
 const AUTOMATION_TAB_KEY = 'automationTabId';
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const injectedContentTabs = new Set<number>();
@@ -333,6 +335,34 @@ async function extractBank(bankUrl: string, workspaceId: string, mode: 'REPLACE'
   }
 }
 
+async function refreshBank(workspaceId: string, bankId: string): Promise<BankDiffResult> {
+  const state = await getWorkspaceState(workspaceId);
+  const bank = state.banks.find((candidate) => candidate.id === bankId);
+  if (!bank || bank.archived) throw new Error('BANK_NOT_FOUND_OR_ARCHIVED');
+  let bankTabId: number | undefined;
+  try {
+    const tab = await chrome.tabs.create({ url: bank.url, active: false });
+    bankTabId = tab.id;
+    if (!bankTabId) throw new Error('BANK_TAB_CREATE_FAILED');
+    await waitForTabLoad(bankTabId);
+    const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: bankTabId }, func: () => ({
+      anchors: Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).map((a) => ({ raw: a.href, label: a.textContent?.trim() || undefined })),
+      markup: document.documentElement.outerHTML,
+    }) });
+    const extraction = extractLinksFromValues([
+      ...((result as { anchors?: Array<{ raw: string; label?: string }> } | undefined)?.anchors ?? []),
+      { raw: (result as { markup?: string } | undefined)?.markup ?? '' },
+    ]);
+    const snapshot: BankSnapshotItem[] = [...extraction.links, ...extraction.invalidLinks].map((item) => ({ url: item.url, label: item.label }));
+    const diff = classifyBankDiff(workspaceId, bank, snapshot, state.queue);
+    bankDiffs.set(`${workspaceId}:${bankId}`, diff);
+    await updateWorkspaceState(workspaceId, (current) => ({ ...current, banks: current.banks.map((item) => item.id === bankId ? { ...item, lastSnapshot: snapshot, lastSnapshotAt: diff.refreshedAt, lastExtractedAt: diff.refreshedAt, lastExtractedCount: snapshot.length, updatedAt: diff.refreshedAt } : item) }));
+    return diff;
+  } finally {
+    if (bankTabId) await chrome.tabs.remove(bankTabId).catch(() => undefined);
+  }
+}
+
 async function handleMessage(message: RuntimeMessage): Promise<unknown> {
   switch (message.type) {
     case 'GET_STATE': return getActiveState();
@@ -341,6 +371,10 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     case 'GET_BANKS': {
       const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
       return { workspaceId, banks: await listBanks(workspaceId, true) };
+    }
+    case 'GET_BANK_DIFF': {
+      const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
+      return bankDiffs.get(`${workspaceId}:${message.bankId}`) ?? null;
     }
     case 'CREATE_BANK': {
       const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
@@ -380,6 +414,32 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       const bank = message.bankId ? (await getWorkspaceState(workspaceId)).banks.find((candidate) => candidate.id === message.bankId) : undefined;
       if (message.bankId && (!bank || bank.archived)) throw new Error('BANK_NOT_FOUND_OR_ARCHIVED');
       return extractBank(bank?.url ?? message.bankUrl, workspaceId, message.mode ?? 'REPLACE', message.bankId);
+    }
+    case 'REFRESH_BANK': {
+      const meta = await getMeta();
+      const workspaceId = message.workspaceId ?? meta.activeWorkspaceId;
+      if (meta.automationWorkspaceId && meta.automationWorkspaceId !== workspaceId) throw new Error('AUTOMATION_OWNED_BY_OTHER_WORKSPACE');
+      return refreshBank(workspaceId, message.bankId);
+    }
+    case 'ADD_DIFF_ITEMS': {
+      const meta = await getMeta();
+      const workspaceId = message.workspaceId ?? meta.activeWorkspaceId;
+      const diff = bankDiffs.get(`${workspaceId}:${message.bankId}`);
+      if (!diff) throw new Error('BANK_DIFF_NOT_FOUND');
+      const workspaceState = await getWorkspaceState(workspaceId);
+      const bank = workspaceState.banks.find((candidate) => candidate.id === message.bankId);
+      if (!bank) throw new Error('BANK_NOT_FOUND');
+      const queue = mergeSelectedDiffItems(workspaceState.queue, diff, bank, message.itemIds);
+      const saved = await updateWorkspaceState(workspaceId, (current) => ({ ...current, queue, session: current.session ? { ...current.session, total: queue.length, updatedAt: Date.now() } : current.session }));
+      bankDiffs.delete(`${workspaceId}:${message.bankId}`);
+      const nextState: AppState = { workspaceId: saved.workspaceId, queue: saved.queue, session: saved.session, history: saved.history };
+      await broadcast(nextState);
+      return nextState;
+    }
+    case 'DISCARD_BANK_DIFF': {
+      const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
+      bankDiffs.delete(`${workspaceId}:${message.bankId}`);
+      return { discarded: true };
     }
     case 'UPDATE_SETTINGS': await saveSettings(message.settings); return updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, ...message.settings, updatedAt: Date.now() } : state.session }));
     case 'START': {
