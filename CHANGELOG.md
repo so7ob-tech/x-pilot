@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0] - Unreleased
+
+### Added
+
+- Multi-select Queue items with Delete, Skip, Retry, Reset to Pending, Move to top, Move to bottom, Assign Bank, and Export selected actions.
+- Active publishing item protection with explicit warning/confirmation and a hard busy-state guard.
+
 ## [0.14.0] - Unreleased
 
 ### Added

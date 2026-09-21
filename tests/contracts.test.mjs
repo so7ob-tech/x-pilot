@@ -154,6 +154,21 @@ test('Feature 13 exposes shared advanced search filters across all entity views'
   assert.match(models, /sessionId\?: string/);
 });
 
+test('Feature 14 exposes all Bulk Queue actions with active-item protection', () => {
+  assert.match(models, /BulkQueueAction/);
+  for (const action of ['BULK_ACTION', 'DELETE', 'SKIP', 'RETRY', 'RESET_PENDING', 'MOVE_TOP', 'MOVE_BOTTOM', 'ASSIGN_BANK', 'EXPORT']) assert.match(models, new RegExp(action));
+  assert.match(serviceWorker, /executeBulkAction/);
+  assert.match(serviceWorker, /BULK_ACTIVE_ITEM_CONFIRMATION_REQUIRED/);
+  assert.match(serviceWorker, /BULK_ACTIVE_ITEM_BUSY/);
+  assert.match(serviceWorker, /BULK_BANK_NOT_FOUND_OR_ARCHIVED/);
+  assert.match(uiSource, /تحديد العناصر الظاهرة/);
+  assert.match(uiSource, /Reset to Pending/);
+  assert.match(uiSource, /Move to top/);
+  assert.match(uiSource, /Move to bottom/);
+  assert.match(uiSource, /Assign Bank/);
+  assert.match(uiSource, /Export selected/);
+});
+
 test('tab bar renders accessible live connection and engine indicators', () => {
   assert.match(uiSource, /GET_RUNTIME_STATUS/);
   assert.match(uiSource, /window\.setInterval\(\(\) => void refreshRuntimeStatus\(\), 1500\)/);
