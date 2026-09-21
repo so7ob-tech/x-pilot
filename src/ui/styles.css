@@ -207,6 +207,12 @@ button.danger:hover, .ui-button-danger:hover { border-color: #df9c99; }
 .search-filters select, .search-filters input { flex: 1 1 120px; min-width: 0; padding: 8px; font-size: 11px; }
 .search-filters button { padding: 7px 9px; font-size: 11px; }
 .search-count { margin: 7px 0; color: var(--color-text-3); font-size: 11px; }
+.queue-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0 7px; color: var(--color-text-2); font-size: 11px; }
+.queue-toolbar label { display: inline-flex; align-items: center; gap: 7px; margin: 0; }
+.queue-toolbar select { width: auto; min-width: 72px; padding: 6px 8px; font-size: 11px; }
+.pagination-controls { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border-subtle); color: var(--color-text-2); font-size: 11px; }
+.pagination-controls button { min-width: 68px; padding: 6px 9px; font-size: 11px; }
+.pagination-controls button:disabled { cursor: not-allowed; opacity: .45; }
 .queue-row { align-items: flex-start; min-width: 0; flex-wrap: wrap; padding: 11px 0 0; border-top: 1px solid var(--color-border-subtle); }
 .queue-row-selected { padding: 10px; border-radius: var(--radius-md); border-color: #85b2e9; background: #edf5ff; }
 .queue-select { flex: 0 0 auto; margin-top: 5px; }
