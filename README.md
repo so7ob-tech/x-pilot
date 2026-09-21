@@ -39,6 +39,7 @@
 - في v0.19.0 أُعيد تصميم Side Panel كواجهة Premium RTL: Header موحد، Workspace context، Navigation مجمعة، Operation Hero، Progress، Status Badges، أيقونات SVG محلية، Design Tokens، Responsive layout، وDark Mode يعتمد على نفس النظام.
 - في v0.19.1 يعالج Dry Run حالة الفشل المبكر عند عدم وجود Automation Session؛ ينشئ تبويب X مؤقتًا، يفحص Composer والمحتوى وزر Post، ثم ينظف التبويب في `finally` دون نشر أو زيادة Attempts.
 - في v0.19.2 يقوم Preflight بفتح X تلقائيًا وفحص Login وComposer والمحتوى وزر Post، وتظهر النتائج في مربعات مختصرة متجاورة.
+- في v0.19.3 تم إصلاح أخطاء SVG التي كانت تمنع ظهور الأيقونات وتؤثر على عمل أزرار Queue وBanks والتشغيل وباقي الواجهة.
 
 ## التطوير
 
