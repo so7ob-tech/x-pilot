@@ -5,7 +5,7 @@ export interface PreflightCheck { id: string; status: PreflightCheckStatus; mess
 export interface PreflightCounts { total: number; ready: number; published: number; failed: number; skipped: number; duplicates: number; publishedDuplicates: number; invalid: number; }
 export interface PreflightResult { ready: boolean; checkedAt: number; workspaceId: string; summary: string; checks: PreflightCheck[]; counts: PreflightCounts; }
 
-interface PreflightInput { workspace?: Workspace; queue: QueueItem[]; banks: TweetBank[]; automationWorkspaceId?: string; alarmsAvailable: boolean; permissionsGranted: boolean; settings: Settings; xInspection?: { pageKind: 'X' | 'LOGIN' | 'CHALLENGE' | 'ERROR' | 'UNKNOWN'; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean } | null; now?: number; }
+interface PreflightInput { workspace?: Workspace; queue: QueueItem[]; banks: TweetBank[]; automationWorkspaceId?: string; alarmsAvailable: boolean; permissionsGranted: boolean; settings: Settings; xInspection?: { pageKind: 'X' | 'LOGIN' | 'CHALLENGE' | 'ERROR' | 'UNKNOWN'; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string } | null; now?: number; }
 
 export function runPreflight(input: PreflightInput): PreflightResult {
   const now = input.now ?? Date.now();
@@ -44,10 +44,10 @@ export function runPreflight(input: PreflightInput): PreflightResult {
   add('alarms', input.alarmsAvailable ? 'PASS' : 'FAIL', input.alarmsAvailable ? 'نظام التنبيهات متاح' : 'نظام التنبيهات غير متاح', undefined, !input.alarmsAvailable);
 
   if (!input.xInspection) add('x-adapter', 'WARN', 'لم يتم فحص X بعد', 'افتح تبويب X ثم أعد الفحص.', false);
-  else if (input.xInspection.pageKind === 'LOGIN') add('x-adapter', 'FAIL', 'X يحتاج إلى تسجيل الدخول', undefined, true);
-  else if (input.xInspection.pageKind === 'CHALLENGE') add('x-adapter', 'FAIL', 'تم اكتشاف Challenge في X', undefined, true);
-  else if (input.xInspection.pageKind !== 'X') add('x-adapter', 'FAIL', 'X Adapter لم يتعرف على الصفحة', undefined, true);
-  else if (!input.xInspection.composerFound || !input.xInspection.postButtonFound || !input.xInspection.postButtonEnabled) add('x-adapter', 'FAIL', 'Composer أو زر Post غير جاهز', undefined, true);
+  else if (input.xInspection.pageKind === 'LOGIN') add('x-adapter', 'FAIL', 'X يحتاج إلى تسجيل الدخول', input.xInspection.reason, true);
+  else if (input.xInspection.pageKind === 'CHALLENGE') add('x-adapter', 'FAIL', 'تم اكتشاف Challenge في X', input.xInspection.reason, true);
+  else if (input.xInspection.pageKind !== 'X') add('x-adapter', 'FAIL', 'X Adapter لم يتعرف على الصفحة', input.xInspection.reason, true);
+  else if (!input.xInspection.composerFound || !input.xInspection.postButtonFound || !input.xInspection.postButtonEnabled) add('x-adapter', 'FAIL', 'Composer أو زر Post غير جاهز', input.xInspection.reason, true);
   else add('x-adapter', 'PASS', 'X Adapter جاهز', undefined, false);
 
   const blockingFailures = checks.filter((check) => check.status === 'FAIL' && check.blocking);
