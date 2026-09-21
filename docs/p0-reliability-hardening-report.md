@@ -134,11 +134,11 @@ The planned release branch is `release/v0.25.8` after the fix branch is merged i
 
 ## Commits
 
-The implementation will be committed as the P0 reliability hardening fix and released as `v0.25.8` after the required Git-flow checks.
+Commit `bacea0f` (`fix: harden automation reliability and backup safety`) contains the verified implementation. The release tag is `v0.25.8`.
 
 ## Pull Request
 
-The Pull Request URL will be recorded here after the fix branch is pushed and the PR is created.
+The implementation PR was [#189](https://github.com/so7ob-tech/x-pilot/pull/189), and the release PR was [#190](https://github.com/so7ob-tech/x-pilot/pull/190). The importable artifact is published in [Release v0.25.8](https://github.com/so7ob-tech/x-pilot/releases/tag/v0.25.8).
 
 ## References
 

@@ -284,9 +284,10 @@ test('v1.0 retains START exclusivity through lease renewal and explicit Workspac
   assert.match(storage, /export async function renewStartLock/);
   assert.match(serviceWorker, /renewStartLock\(startToken\)/);
   assert.match(serviceWorker, /setInterval\(\(\) =>/);
-  assert.match(uiSource, /workspaceScopeMode/);
-  assert.match(uiSource, /filters\.activeWorkspace/);
-  assert.match(fs.readFileSync(path.join(root, 'src/domain/search-filters.ts'), 'utf8'), /export type WorkspaceScopeMode/);
+  assert.doesNotMatch(uiSource, /workspaceScopeMode|@active|filters\.activeWorkspace/);
+  assert.match(uiSource, /value=\{filters\.workspaceId\}/);
+  assert.match(uiSource, /setQueueFilters\(\{ \.\.\.emptySearchFilters, workspaceId \}\)/);
+  assert.doesNotMatch(fs.readFileSync(path.join(root, 'src/domain/search-filters.ts'), 'utf8'), /WorkspaceScopeMode|workspaceScopeMode/);
   assert.match(fs.readFileSync(path.join(root, 'src/ui/state/workspace-state-store.ts'), 'utf8'), /reconcileWorkspaceState/);
 });
 
