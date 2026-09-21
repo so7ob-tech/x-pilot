@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.22.0] - Unreleased
+
+### Changed
+
+- فُصلت تبويبات التشغيل واختبارات البدء والتحليلات والتشخيص إلى وحدات UI مستقلة دون Lazy Loading أو تغيير Business Logic.
+- وُحّدت ترويسة `app-header` ومسافات العرض في جميع التبويبات.
+- أصبح `workspace-switcher premium-switcher` يعرض `WORKSPACE ACTIVE` واسم المساحة بجوار زر إدارة مساحات العمل.
+- أزيل عداد العناصر والمنشورات والرمز `◈` من مربع Workspace المختصر.
+
 ## [0.21.1] - Rollback
 
 ### Changed
