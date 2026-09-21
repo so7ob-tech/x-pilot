@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.0] - Unreleased
+
+### Added
+
+- Preflight Check before Queue Start.
+- Structured PASS/WARN/FAIL readiness report for Workspace, Queue, Banks, X Adapter, permissions, alarms, duplicates, retry configuration, and interval.
+- Blocking Start guard for invalid Queue, X login/challenge, duplicate policy violations, missing permissions, and conflicting automation ownership.
+- Dashboard readiness counts and actionable diagnostic details.
+
 ## [0.9.0] - Unreleased
 
 ### Added

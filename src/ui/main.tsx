@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AppMetaState, AppState, BankDiffItem, BankDiffResult, HistoricalSession, QueueItem, RuntimeMessage, RuntimeStatus, Settings, TweetBank, Workspace } from '../domain/models';
+import type { AppMetaState, AppState, BankDiffItem, BankDiffResult, HistoricalSession, PreflightResult, QueueItem, RuntimeMessage, RuntimeStatus, Settings, TweetBank, Workspace } from '../domain/models';
 import { defaultSettings } from '../domain/models';
 import { getTweetPreview } from '../extraction/tweet-preview';
 import './styles.css';
@@ -27,6 +27,7 @@ function App() {
   const [selectedBankId, setSelectedBankId] = useState('');
   const [bankDiff, setBankDiff] = useState<BankDiffResult | null>(null);
   const [selectedDiffIds, setSelectedDiffIds] = useState<string[]>([]);
+  const [preflight, setPreflight] = useState<PreflightResult | null>(null);
   const session = state.session;
   const published = useMemo(() => state.queue.filter((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED').length, [state.queue]);
   const failed = useMemo(() => state.queue.filter((item) => item.status === 'FAILED').length, [state.queue]);
@@ -49,7 +50,7 @@ function App() {
   useEffect(() => { if (meta?.activeWorkspaceId) void refreshBanks(); }, [meta?.activeWorkspaceId]);
   useEffect(() => { const timer = window.setInterval(() => void refreshRuntimeStatus(), 1500); return () => window.clearInterval(timer); }, []);
   useEffect(() => { const timer = window.setInterval(() => setNowMs(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
-  const act = async (message: RuntimeMessage, success?: string) => { const result = await send(message); if (result?.error) setNotice(result.error); else { if (result?.queue) setState(result); else await refresh(); if (success) setNotice(success); } };
+  const act = async (message: RuntimeMessage, success?: string) => { const result = await send(message); if (result?.error) setNotice(result.error); else { if (result?.queue) setState(result); else await refresh(); setPreflight(null); if (success) setNotice(success); } };
   const extract = async () => {
     const selectedBank = banks.find((bank) => bank.id === selectedBankId && !bank.archived);
     const extractionUrl = selectedBank?.url ?? bankUrl.trim();
@@ -64,10 +65,12 @@ function App() {
     const result = await send({ type: 'EXTRACT_BANK', bankId: selectedBank?.id, bankUrl: extractionUrl, workspaceId: meta?.activeWorkspaceId, mode: extractMode });
     if (result?.error) return setNotice(`فشل الاستخراج: ${result.error}`);
     if (result?.queue) setState(result);
+    setPreflight(null);
     await refreshBanks();
     setNotice(`تم العثور على ${result?.queue?.length ?? 0} رابطًا`);
   };
   const start = async () => { if (settings.confirmBeforeStart && !window.confirm(`بدء نشر ${remaining} عنصر؟`)) return; await act({ type: 'START', confirmed: true, workspaceId: meta?.activeWorkspaceId }, 'بدأت الجلسة'); };
+  const runPreflightCheck = async () => { const result = await send({ type: 'PREFLIGHT_CHECK', workspaceId: meta?.activeWorkspaceId }); if (result?.error) return setNotice(result.error); setPreflight(result); setNotice(result.summary); };
   const updateSettings = async (next: Settings) => { setSettings(next); await act({ type: 'UPDATE_SETTINGS', settings: next }); };
   const switchWorkspace = async (workspaceId: string) => { const result = await send({ type: 'SET_ACTIVE_WORKSPACE', workspaceId }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); await refresh(); setActiveTab('operation'); };
   const createNewWorkspace = async () => { const name = window.prompt('اسم Workspace الجديدة؟'); if (!name?.trim()) return; const result = await send({ type: 'CREATE_WORKSPACE', name: name.trim() }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); };
@@ -78,7 +81,7 @@ function App() {
   const archiveSelectedBank = async (bank: TweetBank) => { const result = await send({ type: bank.archived ? 'RESTORE_BANK' : 'ARCHIVE_BANK', workspaceId: meta?.activeWorkspaceId, bankId: bank.id }); if (result?.error) return setNotice(result.error); await refreshBanks(); };
   const deleteSelectedBank = async (bank: TweetBank) => { if (!window.confirm(`حذف البنك "${bank.name}"؟`)) return; const result = await send({ type: 'DELETE_BANK', workspaceId: meta?.activeWorkspaceId, bankId: bank.id, confirmed: true }); if (result?.error) return setNotice(result.error); if (selectedBankId === bank.id) setSelectedBankId(''); await refreshBanks(); };
   const refreshSelectedBank = async (bank: TweetBank) => { setSelectedBankId(bank.id); const result = await send({ type: 'REFRESH_BANK', workspaceId: meta?.activeWorkspaceId, bankId: bank.id }); if (result?.error) return setNotice(`فشل تحديث البنك: ${result.error}`); setBankDiff(result); setSelectedDiffIds(result.selectedNewIds ?? []); setNotice(`تمت مقارنة البنك: ${result.items.filter((item: BankDiffItem) => item.category === 'NEW').length} جديد`); await refreshBanks(); };
-  const addSelectedDiff = async () => { if (!bankDiff || !selectedDiffIds.length) return setNotice('حدد عنصرًا جديدًا واحدًا على الأقل'); const result = await send({ type: 'ADD_DIFF_ITEMS', workspaceId: meta?.activeWorkspaceId, bankId: bankDiff.bankId, itemIds: selectedDiffIds }); if (result?.error) return setNotice(result.error); if (result?.queue) setState(result); setBankDiff(null); setSelectedDiffIds([]); setNotice('تمت إضافة العناصر المحددة إلى Queue'); };
+  const addSelectedDiff = async () => { if (!bankDiff || !selectedDiffIds.length) return setNotice('حدد عنصرًا جديدًا واحدًا على الأقل'); const result = await send({ type: 'ADD_DIFF_ITEMS', workspaceId: meta?.activeWorkspaceId, bankId: bankDiff.bankId, itemIds: selectedDiffIds }); if (result?.error) return setNotice(result.error); if (result?.queue) setState(result); setPreflight(null); setBankDiff(null); setSelectedDiffIds([]); setNotice('تمت إضافة العناصر المحددة إلى Queue'); };
   const discardDiff = async () => { if (bankDiff) await send({ type: 'DISCARD_BANK_DIFF', workspaceId: meta?.activeWorkspaceId, bankId: bankDiff.bankId }); setBankDiff(null); setSelectedDiffIds([]); };
 
   return <main className="shell">
@@ -98,8 +101,9 @@ function App() {
     {activeTab === 'operation' && <section className="tab-panel" role="tabpanel" aria-label="التشغيل">
       <section className="card"><div className="section-heading"><h2>لوحة التشغيل</h2><span className="session-progress">{published} منشور · {remaining} متبقٍ</span></div><div className="stats"><div><b>{state.queue.length}</b><span>الإجمالي</span></div><div><b>{published}</b><span>منشور</span></div><div><b>{failed}</b><span>فشل</span></div><div><b>{remaining}</b><span>متبقٍ</span></div></div></section>
       <CurrentTweetCard item={currentItem} position={session?.currentIndex} logoUrl={logoUrl} />
+      <PreflightCard result={preflight} onCheck={() => void runPreflightCheck()} />
       {session?.status === 'PAUSED' && remaining > 0 && <RecoveryCard logoUrl={logoUrl} onResume={() => void act({ type: 'RESUME' }, 'تم استئناف Queue')} />}
-      <section className="card controls"><h2>التشغيل</h2><div className="row controls-row"><button className="primary" onClick={start} disabled={!state.queue.length || canPause || canResume}>Start</button><button onClick={() => void act({ type: 'PAUSE' }, 'تم إيقاف Queue مؤقتًا')} disabled={!canPause}>Pause</button><button onClick={() => void act({ type: 'RESUME' }, 'تم استئناف Queue')} disabled={!canResume}>Resume</button><button className="danger" onClick={() => void act({ type: 'STOP' }, 'تم إيقاف Queue نهائيًا')} disabled={!session || session.status === 'STOPPED' || session.status === 'COMPLETED'}>Stop</button></div><p className="muted">العنصر الحالي: {session?.currentItemId ? currentItem?.position ?? '-' : '-'}</p>{session?.status === 'PAUSED' && <p className="paused-hint">Queue متوقف مؤقتًا — اضغط Resume للمتابعة.</p>}{session?.status === 'WAITING' && <div className="countdown"><span>التغريدة التالية بعد</span><strong>{formatCountdown(countdownSeconds)}</strong></div>}</section>
+      <section className="card controls"><h2>التشغيل</h2><div className="row controls-row"><button className="primary" onClick={start} disabled={!state.queue.length || canPause || canResume || preflight === null || !preflight.ready}>Start</button><button onClick={() => void act({ type: 'PAUSE' }, 'تم إيقاف Queue مؤقتًا')} disabled={!canPause}>Pause</button><button onClick={() => void act({ type: 'RESUME' }, 'تم استئناف Queue')} disabled={!canResume}>Resume</button><button className="danger" onClick={() => void act({ type: 'STOP' }, 'تم إيقاف Queue نهائيًا')} disabled={!session || session.status === 'STOPPED' || session.status === 'COMPLETED'}>Stop</button></div><p className="muted">العنصر الحالي: {session?.currentItemId ? currentItem?.position ?? '-' : '-'}</p>{session?.status === 'PAUSED' && <p className="paused-hint">Queue متوقف مؤقتًا — اضغط Resume للمتابعة.</p>}{session?.status === 'WAITING' && <div className="countdown"><span>التغريدة التالية بعد</span><strong>{formatCountdown(countdownSeconds)}</strong></div>}</section>
     </section>}
 
     {activeTab === 'queue' && <section className="tab-panel" role="tabpanel" aria-label="بنك التغريدات وقائمة Queue">
@@ -133,6 +137,8 @@ function TabButton({ id, activeTab, onSelect, icon, label }: { id: TabId; active
 function StatusIndicator({ kind, value, label }: { kind: 'connection' | 'engine'; value: string; label: string }) { return <span className={`live-indicator ${kind}-indicator ${kind}-${value}`}><span className="live-dot" aria-hidden="true" />{label}</span>; }
 function connectionLabel(value: RuntimeStatus['connection']): string { return value === 'CONNECTED' ? 'متصل' : value === 'DISCONNECTED' ? 'غير متصل' : 'غير مطلوب'; }
 function engineLabel(value: RuntimeStatus['engineStatus']): string { const labels: Record<RuntimeStatus['engineStatus'], string> = { IDLE: 'خامل', RUNNING: 'يعمل الآن', WAITING: 'في الانتظار', PAUSED: 'متوقف مؤقتًا', STOPPED: 'متوقف', COMPLETED: 'مكتمل', FAILED: 'فشل' }; return labels[value]; }
+
+function PreflightCard({ result, onCheck }: { result: PreflightResult | null; onCheck: () => void }) { return <section className={`card preflight-card ${result ? (result.ready ? 'preflight-ready' : 'preflight-blocked') : ''}`}><div className="section-heading"><div><span className="eyebrow">PREFLIGHT CHECK</span><h2>فحص الجاهزية قبل التشغيل</h2></div><button className="primary" onClick={onCheck}>فحص الآن</button></div>{result ? <><div className="preflight-summary"><strong>{result.summary}</strong><span>{result.counts.ready} جاهز · {result.counts.published} منشور · {result.counts.duplicates + result.counts.publishedDuplicates} مكرر · {result.counts.invalid} غير صالح</span></div><div className="preflight-checks">{result.checks.map((check) => <div className={`preflight-check preflight-${check.status.toLowerCase()}`} key={check.id}><span aria-hidden="true">{check.status === 'PASS' ? '✓' : check.status === 'WARN' ? '!' : '×'}</span><div><strong>{check.message}</strong>{check.details && <small>{check.details}</small>}</div></div>)}</div><small className="muted">آخر فحص: {new Date(result.checkedAt).toLocaleTimeString('ar')}</small></> : <p className="muted">نفّذ الفحص للتحقق من Workspace وQueue وX والصلاحيات قبل الضغط على Start.</p>}</section>; }
 
 function CurrentTweetCard({ item, position, logoUrl }: { item?: QueueItem; position?: number; logoUrl: string }) { return <section className="card current-card"><div className="current-heading"><div className="current-brand"><img src={logoUrl} alt="" /><div><span className="eyebrow">CURRENT TWEET</span><h2>التغريدة الحالية</h2></div></div>{item && <span className={`item-status status-${item.status}`}>{item.status}</span>}</div>{item ? <><p className="current-preview" dir="auto">{getTweetPreview(item.targetUrl, item.label, 180)}</p><div className="current-meta"><span>العنصر {position ?? item.position}</span><span>المحاولات {item.attempts}</span>{item.startedAt && <span>بدأت {new Date(item.startedAt).toLocaleTimeString('ar')}</span>}</div>{item.lastError && <p className="error-text">آخر خطأ: {item.lastError}</p>}<a className="primary-link" href={item.targetUrl} target="_blank" rel="noreferrer">فتح رابط التغريدة</a></> : <p className="muted">لا توجد تغريدة قيد التشغيل حاليًا. ابدأ Queue من تبويب التشغيل.</p>}</section>; }
 
