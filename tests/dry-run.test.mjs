@@ -6,7 +6,11 @@ import path from 'node:path';
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 const worker = fs.readFileSync(path.join(root, 'src/background/service-worker.ts'), 'utf8');
 const models = fs.readFileSync(path.join(root, 'src/domain/models.ts'), 'utf8');
-const ui = fs.readFileSync(path.join(root, 'src/ui/main.tsx'), 'utf8');
+const ui = [
+  'src/ui/main.tsx',
+  'src/ui/tabs/StartupTestsTab.tsx',
+  'src/ui/components/operation-cards.tsx',
+].map((file) => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
 
 test('Dry Run models enumerate every required inspection outcome', () => {
   assert.match(models, /DryRunItemStatus = 'READY' \| 'LOGIN_REQUIRED' \| 'CONTENT_MISSING' \| 'POST_BUTTON_NOT_FOUND' \| 'INVALID_URL' \| 'CHALLENGE_DETECTED' \| 'ERROR'/);
