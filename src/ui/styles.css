@@ -62,11 +62,11 @@ button, select, input { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 
-.shell { width: min(100%, 760px); margin: 0 auto; padding: 18px 16px 28px; }
+.shell { width: min(100%, 760px); margin: 0 auto; padding: 10px 12px 20px; }
 .shell-operation { padding-top: 10px; }
 .app-header, .section-heading, .row, .stats, .queue-row { display: flex; align-items: center; gap: var(--space-3); }
 .app-header, .section-heading { justify-content: space-between; }
-.app-header { margin-bottom: 14px; }
+.app-header { margin-bottom: 8px; }
 .brand-lockup, .settings-heading, .current-brand { display: flex; align-items: center; gap: 11px; }
 .brand-logo { width: 43px; height: 43px; object-fit: contain; filter: drop-shadow(0 5px 10px #1667d926); }
 .settings-heading img, .current-brand img { width: 34px; height: 34px; object-fit: contain; }
@@ -79,7 +79,7 @@ h3 { margin-bottom: 10px; font-size: 14px; }
 .header-status { display: inline-flex; align-items: center; gap: 7px; color: var(--color-text-2); font-size: 11px; font-weight: 800; }
 .header-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); box-shadow: 0 0 0 4px #21a9681c; }
 
-.card, .ui-card { margin-bottom: 14px; padding: 17px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
+.card, .ui-card { margin-bottom: 9px; padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .card { transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
 .card:hover { border-color: #bfd0e5; box-shadow: var(--shadow-md); }
 input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: var(--color-surface); transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
@@ -109,10 +109,10 @@ button.danger:hover, .ui-button-danger:hover { border-color: #df9c99; }
 .premium-switcher select { max-width: 0; flex: 0 0 0; padding: 0; border: 0; opacity: 0; }
 
 .tabs-bar { position: relative; z-index: 5; display: grid; gap: 8px; min-height: 13px; margin: 0 -4px 7px; }
-.tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 5px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-2); }
+.tabs { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 3px; padding: 4px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-2); }
 .nav-group { display: contents; }
 .nav-group > span { display: none; }
-.tab-button { min-width: 0; min-height: 47px; flex-direction: column; gap: 4px; padding: 7px 4px; border: 0; color: var(--color-text-3); background: transparent; font-size: 10px; }
+.tab-button { min-width: 0; min-height: 34px; flex: 0 1 auto; flex-direction: row; gap: 5px; padding: 6px 8px; border: 0; color: var(--color-text-3); background: transparent; font-size: 10px; }
 .tab-button span { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
 .tab-button.active { color: var(--color-primary); background: var(--color-surface); box-shadow: var(--shadow-sm); }
 .tab-button .icon { opacity: .8; }
@@ -291,9 +291,8 @@ button.danger:hover, .ui-button-danger:hover { border-color: #df9c99; }
 footer { margin: 18px 2px 6px; }
 
 @media (max-width: 520px) {
-  .shell { padding: 14px 11px 24px; }
-  .tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .tab-button { min-height: 44px; font-size: 9px; }
+  .shell { padding: 10px 11px 18px; }
+  .tab-button { min-height: 32px; padding: 5px 6px; font-size: 9px; }
   .stats { gap: 5px; }
   .stats b, .metric-card strong { font-size: 17px; }
   .analytics-grid { grid-template-columns: repeat(2, 1fr); }
