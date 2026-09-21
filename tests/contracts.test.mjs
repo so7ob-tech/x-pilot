@@ -10,6 +10,8 @@ const serviceWorker = fs.readFileSync(path.join(root, 'src/background/service-wo
 const contentEntry = fs.readFileSync(path.join(root, 'src/content/content-entry.ts'), 'utf8');
 const uiSource = fs.readFileSync(path.join(root, 'src/ui/main.tsx'), 'utf8');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+const models = fs.readFileSync(path.join(root, 'src/domain/models.ts'), 'utf8');
+const storage = fs.readFileSync(path.join(root, 'src/storage/storage-repository.ts'), 'utf8');
 
  test('package and manifest versions stay synchronized', () => {
   assert.equal(packageJson.version, manifest.version);
@@ -49,7 +51,7 @@ test('UI and README use the official X-Pilot branding asset', () => {
 });
 
 test('Side Panel exposes operation, tweet-bank, and settings tabs', () => {
-  assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'settings'/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /aria-label="حالة X-Pilot والتبويبات"/);
   assert.match(uiSource, /label="التشغيل"/);
   assert.match(uiSource, /label="بنك التغريدات"/);
@@ -145,7 +147,7 @@ test('content-entry installs only one runtime message listener per page', () => 
 });
 
 test('bank extraction always removes its temporary tab in finally', () => {
-  assert.match(serviceWorker, /async function extractBank\(bankUrl: string\)/);
+  assert.match(serviceWorker, /async function extractBank\(bankUrl: string, workspaceId: string\)/);
   assert.match(serviceWorker, /let bankTabId: number \| undefined/);
   assert.match(serviceWorker, /finally \{[\s\S]*if \(bankTabId\) await chrome\.tabs\.remove\(bankTabId\)\.catch/);
 });
@@ -169,4 +171,34 @@ test('stop and completion paths clean the configured automation tab', () => {
   assert.match(serviceWorker, /const visibleState = nextStatus === 'COMPLETED' && nextState\.session/);
   assert.match(serviceWorker, /const visibleState = completed\.session \? await closeAutomationTabIfConfigured/);
   assert.match(serviceWorker, /if \(current\.session\?\.status !== 'RUNNING' \|\| latestItem\?\.operationId !== operationId\)/);
+});
+
+test('Workspace domain model includes independent entities and ownership metadata', () => {
+  assert.match(models, /export interface Workspace \{/);
+  assert.match(models, /export interface TweetBank \{/);
+  assert.match(models, /export interface WorkspaceState extends AppState/);
+  assert.match(models, /export interface AppMetaState \{/);
+  assert.match(models, /automationWorkspaceId\?: string/);
+  assert.match(models, /workspaceId\?: string/);
+});
+
+test('storage migration preserves legacy data and creates an idempotent default Workspace', () => {
+  assert.match(storage, /LEGACY_STATE_KEY = 'xQueueState'/);
+  assert.match(storage, /LEGACY_SETTINGS_KEY = 'xQueueSettings'/);
+  assert.match(storage, /META_KEY = 'xPilotMeta'/);
+  assert.match(storage, /schemaVersion: 2/);
+  assert.match(storage, /مساحة العمل الافتراضية/);
+  assert.match(storage, /await chrome\.storage\.local\.set\(\{ \[workspaceKey\(workspace\.id\)\]: migrated, \[META_KEY\]: meta \}\)/);
+  assert.match(storage, /if \(existing\?\.schemaVersion === 2\)/);
+});
+
+test('Workspace runtime operations expose explicit ownership and management APIs', () => {
+  assert.match(storage, /export async function claimAutomationOwner/);
+  assert.match(storage, /AUTOMATION_OWNED_BY_OTHER_WORKSPACE/);
+  assert.match(storage, /export async function releaseAutomationOwner/);
+  assert.match(serviceWorker, /await claimAutomationOwner\(message\.workspaceId \?\? meta\.activeWorkspaceId\)/);
+  assert.match(serviceWorker, /GET_WORKSPACES/);
+  assert.match(serviceWorker, /SET_ACTIVE_WORKSPACE/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'workspaces' \| 'settings'/);
+  assert.match(uiSource, /function WorkspaceCard/);
 });

@@ -3,13 +3,25 @@ import { defaultSettings } from '../domain/models';
 import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
-import { addAttempt, getSettings, getState, saveQueue, saveSession, saveSettings, updateState } from '../storage/storage-repository';
+import { addAttempt, claimAutomationOwner, createWorkspace, deleteWorkspace, getAutomationOwner, getMeta, getSettings, getState as getActiveState, getWorkspaceState, listWorkspaces, releaseAutomationOwner, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateState as updateActiveState, updateWorkspace, updateWorkspaceState, archiveWorkspace, restoreWorkspace } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
 const AUTOMATION_TAB_KEY = 'automationTabId';
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const injectedContentTabs = new Set<number>();
 const contentInjectionInFlight = new Map<number, Promise<void>>();
+
+async function getState(): Promise<AppState> {
+  const owner = await getAutomationOwner();
+  return owner ? getWorkspaceState(owner) : getActiveState();
+}
+
+async function updateRuntimeState(mutator: (state: AppState) => AppState): Promise<AppState> {
+  const owner = await getAutomationOwner();
+  if (!owner) return updateActiveState(mutator);
+  const saved = await updateWorkspaceState(owner, (state) => ({ ...state, ...mutator(state), workspaceId: owner }));
+  return { workspaceId: saved.workspaceId, queue: saved.queue, session: saved.session, history: saved.history };
+}
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === 'loading') injectedContentTabs.delete(tabId);
@@ -20,7 +32,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   void getState().then((state) => {
     if (state.session?.automationTabId !== tabId) return;
     void chrome.storage.local.remove(AUTOMATION_TAB_KEY);
-    void updateState((current) => current.session?.automationTabId === tabId
+    void updateRuntimeState((current) => current.session?.automationTabId === tabId
       ? { ...current, session: { ...current.session, automationTabId: undefined, updatedAt: Date.now() } }
       : current);
   }).catch(() => undefined);
@@ -32,17 +44,18 @@ async function broadcast(state?: AppState) {
 }
 
 async function getRuntimeStatus(): Promise<RuntimeStatus> {
+  const automationWorkspaceId = await getAutomationOwner();
   const state = await getState();
   const session = state.session;
   const activeEngine = session?.status === 'RUNNING' || session?.status === 'WAITING' || session?.status === 'PAUSED';
   if (!activeEngine || !session?.automationTabId) {
-    return { engineStatus: session?.status ?? 'IDLE', connection: 'NOT_REQUIRED', checkedAt: Date.now() };
+    return { engineStatus: session?.status ?? 'IDLE', connection: 'NOT_REQUIRED', automationWorkspaceId, checkedAt: Date.now() };
   }
   try {
     await chrome.tabs.get(session.automationTabId);
-    return { engineStatus: session.status, connection: 'CONNECTED', automationTabId: session.automationTabId, checkedAt: Date.now() };
+    return { engineStatus: session.status, connection: 'CONNECTED', automationTabId: session.automationTabId, automationWorkspaceId, checkedAt: Date.now() };
   } catch {
-    return { engineStatus: session.status, connection: 'DISCONNECTED', automationTabId: session.automationTabId, checkedAt: Date.now() };
+    return { engineStatus: session.status, connection: 'DISCONNECTED', automationTabId: session.automationTabId, automationWorkspaceId, checkedAt: Date.now() };
   }
 }
 
@@ -50,7 +63,7 @@ async function recoverPersistedState(): Promise<AppState> {
   const current = await getState();
   const recovered = normalizeRecovery(current);
   const changed = JSON.stringify(recovered) !== JSON.stringify(current);
-  const state = changed ? await updateState(() => recovered) : current;
+  const state = changed ? await updateRuntimeState(() => recovered) : current;
   await chrome.alarms.clear(ALARM_NAME);
   if (hasFutureRecoveryAlarm(state)) {
     await chrome.alarms.create(ALARM_NAME, { when: state.session!.nextRunAt!, persistAcrossSessions: true });
@@ -68,7 +81,7 @@ async function getOrCreateAutomationTab(session: AutomationSession): Promise<num
   }
   const tab = await chrome.tabs.create({ url: 'about:blank', active: false });
   if (!tab.id) throw new Error('AUTOMATION_TAB_CREATE_FAILED');
-  await updateState((state) => ({ ...state, session: state.session ? { ...state.session, automationTabId: tab.id, updatedAt: Date.now() } : null }));
+  await updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, automationTabId: tab.id, updatedAt: Date.now() } : null }));
   await chrome.storage.local.set({ [AUTOMATION_TAB_KEY]: tab.id });
   return tab.id;
 }
@@ -107,7 +120,7 @@ async function closeAutomationTabIfConfigured(session: AutomationSession): Promi
   if (!tabId || !shouldClose) return getState();
   await chrome.tabs.remove(tabId).catch(() => undefined);
   await chrome.storage.local.remove(AUTOMATION_TAB_KEY);
-  return updateState((state) => state.session?.automationTabId === tabId
+  return updateRuntimeState((state) => state.session?.automationTabId === tabId
     ? { ...state, session: { ...state.session, automationTabId: undefined, updatedAt: Date.now() } }
     : state);
 }
@@ -160,7 +173,7 @@ async function processCurrentItem(): Promise<void> {
   if (!item || !canStartItem(item.status)) return;
   const operationId = crypto.randomUUID();
   const startedAt = Date.now();
-  await updateState((current) => ({
+  await updateRuntimeState((current) => ({
     ...current,
     queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'OPENING', attempts: candidate.attempts + 1, startedAt, operationId, updatedAt: startedAt } : candidate)
   }));
@@ -173,12 +186,12 @@ async function processCurrentItem(): Promise<void> {
     await wait(300);
     await waitForPublishReady(tabId);
     await assertOperationActive(item.id, operationId);
-    await updateState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'READY', updatedAt: Date.now() } : candidate) }));
+    await updateRuntimeState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'READY', updatedAt: Date.now() } : candidate) }));
     const lockedState = await getState();
     const lockedItem = lockedState.queue.find((candidate) => candidate.id === item.id);
     if (!lockedItem || lockedItem.operationId !== operationId || lockedItem.status !== 'READY') throw new Error('ITEM_LOCK_LOST');
     await assertOperationActive(item.id, operationId);
-    await updateState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'PUBLISHING', updatedAt: Date.now() } : candidate) }));
+    await updateRuntimeState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'PUBLISHING', updatedAt: Date.now() } : candidate) }));
     const result = await chrome.tabs.sendMessage(tabId, { type: 'X_PUBLISH' });
     await wait(1800);
     const after = await inspectTab(tabId);
@@ -188,7 +201,7 @@ async function processCurrentItem(): Promise<void> {
     const nextItem = getNextPendingItem((await getState()).queue, item.id);
     const nextRunAt = nextItem ? finishedAt + session.intervalMinutes * 60_000 : undefined;
     const nextStatus = nextItem ? 'WAITING' : 'COMPLETED';
-    const nextState = await updateState((current) => ({
+    const nextState = await updateRuntimeState((current) => ({
       ...current,
       queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: finalStatus, publishedAt: finishedAt, updatedAt: finishedAt, operationId: undefined } : candidate),
       session: current.session ? { ...current.session, status: nextStatus, currentItemId: nextItem?.id, currentIndex: nextItem?.position ?? current.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? finishedAt : current.session.completedAt, updatedAt: finishedAt } : null,
@@ -200,11 +213,12 @@ async function processCurrentItem(): Promise<void> {
     const visibleState = nextStatus === 'COMPLETED' && nextState.session
       ? await closeAutomationTabIfConfigured(nextState.session)
       : nextState;
+    if (nextStatus === 'COMPLETED' && nextState.workspaceId) await releaseAutomationOwner(nextState.workspaceId);
     await broadcast(visibleState);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
     if (message === 'AUTOMATION_INTERRUPTED') {
-      const interruptedState = await updateState((current) => ({
+      const interruptedState = await updateRuntimeState((current) => ({
         ...current,
         queue: current.queue.map((candidate) => candidate.id === item.id && candidate.operationId === operationId && candidate.status !== 'PUBLISHING' ? { ...candidate, status: 'PENDING', operationId: undefined, updatedAt: Date.now() } : candidate)
       }));
@@ -225,7 +239,7 @@ async function processCurrentItem(): Promise<void> {
     const nextStatus = exhausted && session.failureBehavior === 'PAUSE' ? 'PAUSED' : nextItem || !exhausted ? 'WAITING' : 'COMPLETED';
     const nextItemId = nextItem?.id ?? (!exhausted ? item.id : undefined);
     const nextItemIndex = nextItem?.position ?? (!exhausted ? item.position : current.session?.currentIndex);
-    const failedState = await updateState((currentState) => ({
+    const failedState = await updateRuntimeState((currentState) => ({
       ...currentState,
       queue: currentState.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: failedStatus, lastError: message, operationId: undefined, updatedAt: Date.now() } : candidate),
       session: currentState.session ? { ...currentState.session, status: nextStatus, currentItemId: nextItemId, currentIndex: nextItemIndex ?? currentState.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? Date.now() : currentState.session.completedAt, updatedAt: Date.now() } : null,
@@ -237,6 +251,7 @@ async function processCurrentItem(): Promise<void> {
     const visibleState = nextStatus === 'COMPLETED' && failedState.session
       ? await closeAutomationTabIfConfigured(failedState.session)
       : failedState;
+    if (nextStatus === 'COMPLETED' && failedState.workspaceId) await releaseAutomationOwner(failedState.workspaceId);
     await broadcast(visibleState);
   }
 }
@@ -246,17 +261,18 @@ async function advanceSession(): Promise<void> {
   if (!state.session || state.session.status !== 'WAITING') return;
   const next = getNextRunnableItem(state.queue, state.session.currentItemId);
   if (!next) {
-    const completed = await updateState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'COMPLETED', completedAt: Date.now(), nextRunAt: undefined, updatedAt: Date.now() } : null }));
+    const completed = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'COMPLETED', completedAt: Date.now(), nextRunAt: undefined, updatedAt: Date.now() } : null }));
     const visibleState = completed.session ? await closeAutomationTabIfConfigured(completed.session) : completed;
+    if (completed.workspaceId) await releaseAutomationOwner(completed.workspaceId);
     await broadcast(visibleState);
     return;
   }
-  const running = await updateState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'RUNNING', currentItemId: next.id, currentIndex: next.position, nextRunAt: undefined, updatedAt: Date.now() } : null }));
+  const running = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'RUNNING', currentItemId: next.id, currentIndex: next.position, nextRunAt: undefined, updatedAt: Date.now() } : null }));
   await broadcast(running);
   await processCurrentItem();
 }
 
-async function extractBank(bankUrl: string): Promise<AppState> {
+async function extractBank(bankUrl: string, workspaceId: string): Promise<AppState> {
   let bankTabId: number | undefined;
   try {
     const tab = await chrome.tabs.create({ url: bankUrl, active: false });
@@ -273,9 +289,10 @@ async function extractBank(bankUrl: string): Promise<AppState> {
     ]);
     const queue: QueueItem[] = [];
     for (const extracted of extraction.links) {
-      queue.push({ id: crypto.randomUUID(), sourceBankUrl: bankUrl, targetUrl: extracted.url, label: extracted.label, position: queue.length + 1, status: 'PENDING', attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
+      queue.push({ id: crypto.randomUUID(), workspaceId, sourceBankUrl: bankUrl, targetUrl: extracted.url, label: extracted.label, position: queue.length + 1, status: 'PENDING', attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
     }
-    const nextState = await updateState((state) => ({ ...state, queue, session: { ...state.session, id: crypto.randomUUID(), bankUrl, status: 'IDLE', currentIndex: 0, total: queue.length, intervalMinutes: defaultSettings.intervalMinutes, maxRetries: defaultSettings.maxRetries, failureBehavior: defaultSettings.failureBehavior, confirmBeforeStart: defaultSettings.confirmBeforeStart, keepAutomationTabOpen: defaultSettings.keepAutomationTabOpen, closeTabOnComplete: defaultSettings.closeTabOnComplete, version: 1, updatedAt: Date.now() } }));
+    const next = await updateWorkspaceState(workspaceId, (state) => ({ ...state, queue, banks: [...state.banks, { id: crypto.randomUUID(), workspaceId, name: new URL(bankUrl).hostname, url: bankUrl, createdAt: Date.now(), updatedAt: Date.now(), lastExtractedAt: Date.now(), lastExtractedCount: queue.length }], session: { ...(state.session ?? {}), workspaceId, id: crypto.randomUUID(), bankUrl, status: 'IDLE', currentIndex: 0, total: queue.length, intervalMinutes: defaultSettings.intervalMinutes, maxRetries: defaultSettings.maxRetries, failureBehavior: defaultSettings.failureBehavior, confirmBeforeStart: defaultSettings.confirmBeforeStart, keepAutomationTabOpen: defaultSettings.keepAutomationTabOpen, closeTabOnComplete: defaultSettings.closeTabOnComplete, version: 1, updatedAt: Date.now() } }));
+    const nextState: AppState = { workspaceId: next.workspaceId, queue: next.queue, session: next.session, history: next.history };
     await broadcast(nextState);
     console.info('Extracted bank', { total: queue.length, duplicateCount: extraction.duplicateCount, invalidCount: extraction.invalidCount });
     return nextState;
@@ -286,18 +303,33 @@ async function extractBank(bankUrl: string): Promise<AppState> {
 
 async function handleMessage(message: RuntimeMessage): Promise<unknown> {
   switch (message.type) {
-    case 'GET_STATE': return getState();
+    case 'GET_STATE': return getActiveState();
+    case 'GET_WORKSPACES': return { workspaces: await listWorkspaces(true), meta: await getMeta() };
+    case 'GET_WORKSPACE_STATE': return getWorkspaceState(message.workspaceId ?? (await getMeta()).activeWorkspaceId);
+    case 'CREATE_WORKSPACE': return createWorkspace(message.name, message.description, message.color, message.icon);
+    case 'UPDATE_WORKSPACE': return updateWorkspace(message.workspaceId, message.patch);
+    case 'ARCHIVE_WORKSPACE': return archiveWorkspace(message.workspaceId);
+    case 'RESTORE_WORKSPACE': return restoreWorkspace(message.workspaceId);
+    case 'DELETE_WORKSPACE': return deleteWorkspace(message.workspaceId, message.confirmed);
+    case 'SET_ACTIVE_WORKSPACE': return setActiveWorkspace(message.workspaceId);
     case 'GET_RUNTIME_STATUS': return getRuntimeStatus();
-    case 'EXTRACT_BANK': return extractBank(message.bankUrl);
-    case 'UPDATE_SETTINGS': await saveSettings(message.settings); return updateState((state) => ({ ...state, session: state.session ? { ...state.session, ...message.settings, updatedAt: Date.now() } : state.session }));
+    case 'EXTRACT_BANK': {
+      const meta = await getMeta();
+      const workspaceId = message.workspaceId ?? meta.activeWorkspaceId;
+      if (meta.automationWorkspaceId && meta.automationWorkspaceId !== workspaceId) throw new Error('AUTOMATION_OWNED_BY_OTHER_WORKSPACE');
+      return extractBank(message.bankUrl, workspaceId);
+    }
+    case 'UPDATE_SETTINGS': await saveSettings(message.settings); return updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, ...message.settings, updatedAt: Date.now() } : state.session }));
     case 'START': {
+      const meta = await getMeta();
+      await claimAutomationOwner(message.workspaceId ?? meta.activeWorkspaceId);
       const settings = await getSettings();
-      const state = await updateState((current) => ({ ...current, session: current.session ? { ...current.session, ...settings, status: 'RUNNING', startedAt: current.session.startedAt ?? Date.now(), currentItemId: current.session.currentItemId ?? current.queue.find((item) => item.status === 'PENDING')?.id, updatedAt: Date.now() } : null }));
+      const state = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, ...settings, status: 'RUNNING', startedAt: current.session.startedAt ?? Date.now(), currentItemId: current.session.currentItemId ?? current.queue.find((item) => item.status === 'PENDING')?.id, updatedAt: Date.now() } : null }));
       await broadcast(state); await processCurrentItem(); return getState();
     }
     case 'PAUSE': {
       await chrome.alarms.clear(ALARM_NAME);
-      const paused = await updateState((state) => ({
+      const paused = await updateRuntimeState((state) => ({
         ...state,
         queue: state.queue.map((item) => item.id === state.session?.currentItemId && (item.status === 'OPENING' || item.status === 'READY') ? { ...item, status: 'PENDING', operationId: undefined, updatedAt: Date.now() } : item),
         session: state.session ? { ...state.session, status: 'PAUSED', pausedAt: Date.now(), nextRunAt: state.session.status === 'WAITING' ? state.session.nextRunAt : undefined, updatedAt: Date.now() } : null
@@ -312,31 +344,33 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       const hasFutureAlarm = Boolean(nextRunAt && nextRunAt > Date.now());
       if (hasFutureAlarm && nextRunAt) {
         await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
-        const waiting = await updateState((state) => ({ ...state, session: state.session ? { ...state.session, status: 'WAITING', pausedAt: undefined, updatedAt: Date.now() } : null }));
+        const waiting = await updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, status: 'WAITING', pausedAt: undefined, updatedAt: Date.now() } : null }));
         await broadcast(waiting);
         return waiting;
       }
       const currentItem = current.queue.find((item) => item.id === current.session?.currentItemId && canStartItem(item.status));
       const next = currentItem ?? getNextPendingItem(current.queue);
-      const running = await updateState((state) => ({ ...state, session: state.session ? { ...state.session, status: 'RUNNING', pausedAt: undefined, nextRunAt: undefined, currentItemId: next?.id, currentIndex: next?.position ?? state.session.currentIndex, updatedAt: Date.now() } : null }));
+      const running = await updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, status: 'RUNNING', pausedAt: undefined, nextRunAt: undefined, currentItemId: next?.id, currentIndex: next?.position ?? state.session.currentIndex, updatedAt: Date.now() } : null }));
       await broadcast(running);
       if (next) await processCurrentItem();
       return running;
     }
     case 'STOP': {
       await chrome.alarms.clear(ALARM_NAME);
-      const stopped = await updateState((state) => ({
+      const stopped = await updateRuntimeState((state) => ({
         ...state,
         queue: state.queue.map((item) => item.id === state.session?.currentItemId && (item.status === 'OPENING' || item.status === 'READY') ? { ...item, status: 'PENDING', operationId: undefined, updatedAt: Date.now() } : item),
         session: state.session ? { ...state.session, status: 'STOPPED', nextRunAt: undefined, updatedAt: Date.now() } : null
       }));
-      return stopped.session ? closeAutomationTabIfConfigured(stopped.session) : stopped;
+      const result = stopped.session ? await closeAutomationTabIfConfigured(stopped.session) : stopped;
+      if (result.workspaceId) await releaseAutomationOwner(result.workspaceId);
+      return result;
     }
-    case 'SKIP_CURRENT': return updateState((state) => ({ ...state, queue: state.queue.map((item) => item.id === state.session?.currentItemId ? { ...item, status: 'SKIPPED', updatedAt: Date.now() } : item) }));
-    case 'RETRY_ITEM': return updateState((state) => ({ ...state, queue: state.queue.map((item) => item.id === message.itemId ? { ...item, status: 'PENDING', attempts: 0, lastError: undefined, updatedAt: Date.now() } : item) }));
-    case 'DELETE_ITEM': return updateState((state) => ({ ...state, queue: state.queue.filter((item) => item.id !== message.itemId).map((item, index) => ({ ...item, position: index + 1 })) }));
-    case 'CLEAR_COMPLETED': return updateState((state) => ({ ...state, queue: state.queue.filter((item) => !isTerminalItem(item.status)).map((item, index) => ({ ...item, position: index + 1 })) }));
-    case 'REORDER': return updateState((state) => { const index = state.queue.findIndex((item) => item.id === message.itemId); const target = message.direction === 'up' ? index - 1 : index + 1; if (index < 0 || target < 0 || target >= state.queue.length) return state; const queue = [...state.queue]; [queue[index], queue[target]] = [queue[target], queue[index]]; return { ...state, queue: queue.map((item, position) => ({ ...item, position: position + 1 })) }; });
+    case 'SKIP_CURRENT': return updateRuntimeState((state) => ({ ...state, queue: state.queue.map((item) => item.id === state.session?.currentItemId ? { ...item, status: 'SKIPPED', updatedAt: Date.now() } : item) }));
+    case 'RETRY_ITEM': return updateRuntimeState((state) => ({ ...state, queue: state.queue.map((item) => item.id === message.itemId ? { ...item, status: 'PENDING', attempts: 0, lastError: undefined, updatedAt: Date.now() } : item) }));
+    case 'DELETE_ITEM': return updateRuntimeState((state) => ({ ...state, queue: state.queue.filter((item) => item.id !== message.itemId).map((item, index) => ({ ...item, position: index + 1 })) }));
+    case 'CLEAR_COMPLETED': return updateRuntimeState((state) => ({ ...state, queue: state.queue.filter((item) => !isTerminalItem(item.status)).map((item, index) => ({ ...item, position: index + 1 })) }));
+    case 'REORDER': return updateRuntimeState((state) => { const index = state.queue.findIndex((item) => item.id === message.itemId); const target = message.direction === 'up' ? index - 1 : index + 1; if (index < 0 || target < 0 || target >= state.queue.length) return state; const queue = [...state.queue]; [queue[index], queue[target]] = [queue[target], queue[index]]; return { ...state, queue: queue.map((item, position) => ({ ...item, position: position + 1 })) }; });
   }
 }
 
