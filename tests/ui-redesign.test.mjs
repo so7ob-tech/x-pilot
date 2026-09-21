@@ -48,3 +48,15 @@ test('operation view keeps Workspace compact and reveals navigation on hover or 
   assert.match(css, /@media \(max-height: 700px\)/);
   assert.match(css, /\.shell-operation \.countdown/);
 });
+
+test('operation dashboard owns the scheduled and waiting timer display', () => {
+  const heroStart = ui.indexOf('className="card operation-hero"');
+  const heroEnd = ui.indexOf('</section>', heroStart);
+  const hero = ui.slice(heroStart, heroEnd);
+  const controlsStart = ui.indexOf('className="card controls"');
+  const controlsEnd = ui.indexOf('</section>', controlsStart);
+  const controls = ui.slice(controlsStart, controlsEnd);
+  assert.match(hero, /dashboard-countdown/);
+  assert.match(hero, /formatCountdown\(countdownSeconds\)/);
+  assert.doesNotMatch(controls, /dashboard-countdown|formatCountdown\(countdownSeconds\)/);
+});
