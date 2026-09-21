@@ -1,7 +1,6 @@
 import type { HistoricalSession, PublishAttempt, QueueItem, TweetBank, WorkspaceState } from './models';
 
 export type SearchStatus = 'ALL' | 'PENDING' | 'PUBLISHED' | 'FAILED' | 'SKIPPED';
-export type WorkspaceScopeMode = 'ACTIVE' | 'ALL' | 'SPECIFIC';
 
 export interface SearchFilters {
   query: string;
@@ -9,25 +8,13 @@ export interface SearchFilters {
   bankId: string;
   sessionId: string;
   workspaceId: string;
-  workspaceScopeMode: WorkspaceScopeMode;
   dateFrom: string;
   dateTo: string;
 }
 
 export const emptySearchFilters: SearchFilters = {
-  query: '', status: 'ALL', bankId: '', sessionId: '', workspaceId: '', workspaceScopeMode: 'ACTIVE', dateFrom: '', dateTo: ''
+  query: '', status: 'ALL', bankId: '', sessionId: '', workspaceId: '', dateFrom: '', dateTo: ''
 };
-
-export function filtersForActiveWorkspace(activeWorkspaceId: string, patch: Partial<SearchFilters> = {}): SearchFilters {
-  return { ...emptySearchFilters, workspaceId: activeWorkspaceId, workspaceScopeMode: 'ACTIVE', ...patch };
-}
-
-export function workspaceScopeMatches(filters: SearchFilters, workspaceId: string | undefined, activeWorkspaceId: string): boolean {
-  if (filters.workspaceScopeMode === 'ALL' || filters.workspaceId === '*') return true;
-  if (!filters.workspaceId && !activeWorkspaceId) return true;
-  const expected = filters.workspaceScopeMode === 'ACTIVE' ? activeWorkspaceId : filters.workspaceId;
-  return Boolean(expected) && workspaceId === expected;
-}
 
 function normalized(value: unknown): string { return String(value ?? '').toLocaleLowerCase().trim(); }
 function statusMatches(status: SearchStatus, value: string): boolean {
@@ -47,20 +34,28 @@ function queryMatches(query: string, values: unknown[]): boolean {
   return !term || values.some((value) => normalized(value).includes(term));
 }
 
-export function filterQueue(items: QueueItem[], filters: SearchFilters, banks: TweetBank[] = [], activeWorkspaceId = filters.workspaceId): QueueItem[] {
+export function workspaceScopeMatches(filters: SearchFilters, workspaceId: string | undefined, activeWorkspaceId = ''): boolean {
+  if (filters.workspaceId === '*') return true;
+  if (filters.workspaceId) return workspaceId === filters.workspaceId;
+  // Empty is only tolerated before async initialisation in pure callers; the UI
+  // initialises it to meta.activeWorkspaceId before displaying a view.
+  return !activeWorkspaceId || workspaceId === activeWorkspaceId;
+}
+
+export function filterQueue(items: QueueItem[], filters: SearchFilters, banks: TweetBank[] = [], activeWorkspaceId = ''): QueueItem[] {
   const bankNames = new Map(banks.map((bank) => [bank.id, bank.name]));
   return items.filter((item) => workspaceScopeMatches(filters, item.workspaceId, activeWorkspaceId) && statusMatches(filters.status, item.status) && (!filters.bankId || filters.bankId === '*' || item.sourceBankId === filters.bankId) && dateMatches(item.updatedAt || item.createdAt, filters) && queryMatches(filters.query, [item.id, item.position, item.label, item.targetUrl, item.sourceBankUrl, bankNames.get(item.sourceBankId ?? '')]));
 }
 
-export function filterBanks(banks: TweetBank[], filters: SearchFilters, activeWorkspaceId = filters.workspaceId): TweetBank[] {
+export function filterBanks(banks: TweetBank[], filters: SearchFilters, activeWorkspaceId = ''): TweetBank[] {
   return banks.filter((bank) => workspaceScopeMatches(filters, bank.workspaceId, activeWorkspaceId) && dateMatches(bank.updatedAt, filters) && queryMatches(filters.query, [bank.id, bank.name, bank.description, bank.url]));
 }
 
-export function filterSessions(sessions: HistoricalSession[], filters: SearchFilters, activeWorkspaceId = filters.workspaceId): HistoricalSession[] {
+export function filterSessions(sessions: HistoricalSession[], filters: SearchFilters, activeWorkspaceId = ''): HistoricalSession[] {
   return sessions.filter((session) => workspaceScopeMatches(filters, session.workspaceId, activeWorkspaceId) && (!filters.sessionId || filters.sessionId === '*' || session.id === filters.sessionId) && statusMatches(filters.status, session.status) && dateMatches(session.updatedAt || session.createdAt, filters) && queryMatches(filters.query, [session.id, session.workspaceId, session.status]));
 }
 
-export function filterHistory(history: PublishAttempt[], filters: SearchFilters, activeWorkspaceId = filters.workspaceId): PublishAttempt[] {
+export function filterHistory(history: PublishAttempt[], filters: SearchFilters, activeWorkspaceId = ''): PublishAttempt[] {
   return history.filter((attempt) => workspaceScopeMatches(filters, attempt.workspaceId, activeWorkspaceId) && (!filters.sessionId || filters.sessionId === '*' || attempt.sessionId === filters.sessionId) && statusMatches(filters.status, attempt.result) && dateMatches(attempt.timestamp, filters) && queryMatches(filters.query, [attempt.id, attempt.queueItemId, attempt.link, attempt.action, attempt.result, attempt.error]));
 }
 

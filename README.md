@@ -1,6 +1,6 @@
 # X-Pilot
 
-> **v1.0.0:** إصدار مستقر يضيف مصالحة فورية لحالة Workspace، نطاقات ACTIVE/ALL/SPECIFIC، حماية من الاستجابات القديمة، وتجديد Lease أثناء START.
+> **v1.0.1:** تم تبسيط Workspace Filter إلى `All Workspaces` أو أسماء المساحات الفعلية، مع مزامنة تلقائية مع Workspace الرئيسية.
 
 <p align="center">
   <img src="public/branding/x-pilot-logo.png" alt="X-Pilot logo" width="180" />
