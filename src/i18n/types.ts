@@ -15,4 +15,5 @@ export type TranslationTree = {
   analytics: Record<string, string>;
   diagnostics: Record<string, string>;
   workspaces: Record<string, string>;
+  ui: Record<string, string>;
 };
