@@ -14,7 +14,7 @@ export interface StartupTestsTabProps {
 export function StartupTestsTab({ preflight, dryRun, runPreflightCheck, runDryRunFirst, runDryRunQueue, stopDryRun }: StartupTestsTabProps) {
   const { t } = useI18n();
   return <section className="tab-panel" role="tabpanel" aria-label={t('tests.title')}>
-    <div className="card tab-intro"><span className="eyebrow">STARTUP VALIDATION</span><h2>{t('tests.title')}</h2><p className="muted">{t('tests.noPost')}</p></div>
+    <div className="card tab-intro"><span className="eyebrow">{t('common.startupValidation')}</span><h2>{t('tests.title')}</h2><p className="muted">{t('tests.noPost')}</p></div>
     <PreflightCard result={preflight} onCheck={runPreflightCheck} />
     <DryRunCard result={dryRun} onFirst={runDryRunFirst} onQueue={runDryRunQueue} onStop={stopDryRun} />
   </section>;

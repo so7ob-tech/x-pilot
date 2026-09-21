@@ -29,7 +29,7 @@ test('premium UI uses semantic design tokens and shared primitives', () => {
 
 test('navigation remains feature-complete while using grouped information architecture', () => {
   for (const key of ['operation', 'startupTests', 'banks', 'sessions', 'history', 'analytics', 'diagnostics', 'workspaces', 'settings']) assert.match(ui, new RegExp(`nav\\.${key}`));
-  for (const group of ['CONTROL', 'CONTENT', 'ACTIVITY', 'INSIGHTS', 'MANAGE']) assert.match(ui, new RegExp(`>${group}<`));
+  for (const key of ['control', 'content', 'activity', 'insights', 'manage']) assert.match(ui, new RegExp(`common\.${key}`));
   assert.match(ui, /aria-current=/);
 });
 
@@ -72,7 +72,7 @@ test('operation dashboard owns the scheduled and waiting timer display', () => {
 
 test('all tabs share the same header and the Workspace switcher stays compact', () => {
   assert.match(ui, /<header className="app-header">/);
-  assert.match(ui, /className="workspace-switcher premium-switcher"><div className="workspace-switcher-copy"><span className="eyebrow">WORKSPACE ACTIVE<\/span><strong>/);
+  assert.match(ui, /className="workspace-switcher premium-switcher"><div className="workspace-switcher-copy"><span className="eyebrow">\{t\('ui\.workspaceActive'\)\}<\/span><strong>/);
   assert.match(ui, /workspace-manage-button/);
   assert.doesNotMatch(ui, /className="workspace-avatar"/);
   assert.doesNotMatch(ui, /عنصر متبقٍ/);
