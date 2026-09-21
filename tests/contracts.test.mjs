@@ -21,6 +21,7 @@ const uiSource = [
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const models = fs.readFileSync(path.join(root, 'src/domain/models.ts'), 'utf8');
 const storage = fs.readFileSync(path.join(root, 'src/storage/storage-repository.ts'), 'utf8');
+const pagination = fs.readFileSync(path.join(root, 'src/domain/pagination.ts'), 'utf8');
 
  test('package and manifest versions stay synchronized', () => {
   assert.equal(packageJson.version, manifest.version);
@@ -193,7 +194,7 @@ test('Feature 14 exposes all Bulk Queue actions with active-item protection', ()
   assert.match(serviceWorker, /BULK_ACTIVE_ITEM_CONFIRMATION_REQUIRED/);
   assert.match(serviceWorker, /BULK_ACTIVE_ITEM_BUSY/);
   assert.match(serviceWorker, /BULK_BANK_NOT_FOUND_OR_ARCHIVED/);
-  assert.match(uiSource, /تحديد العناصر الظاهرة/);
+  assert.match(uiSource, /تحديد عناصر الصفحة/);
   assert.match(uiSource, /Reset to Pending/);
   assert.match(uiSource, /Move to top/);
   assert.match(uiSource, /Move to bottom/);
@@ -426,4 +427,16 @@ test('Preflight Check exposes structured checks and guards Start', () => {
   assert.match(serviceWorker, /PREFLIGHT_FAILED/);
   assert.match(uiSource, /PREFLIGHT CHECK/);
   assert.match(uiSource, /فحص الآن/);
+});
+
+test('Queue exposes selectable page sizes and previous/next pagination', () => {
+  assert.match(pagination, /export type PageSize = 10 \| 50 \| 100 \| 'ALL'/);
+  assert.match(uiSource, /عدد عناصر Queue في الصفحة/);
+  assert.match(uiSource, /value="10"/);
+  assert.match(uiSource, /value="50"/);
+  assert.match(uiSource, /value="100"/);
+  assert.match(uiSource, /value="ALL"/);
+  assert.match(uiSource, /pagination-controls/);
+  assert.match(uiSource, /setQueuePage\(\(current\) => Math\.max\(1, current - 1\)\)/);
+  assert.match(uiSource, /setQueuePage\(\(current\) => Math\.min\(queuePageCount, current \+ 1\)\)/);
 });
