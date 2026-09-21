@@ -144,7 +144,7 @@ function App() {
   const allWorkspaceAnalytics = workspaceStates.map(calculateWorkspaceAnalytics);
 
   const progress = state.queue.length ? (published / state.queue.length) * 100 : 0;
-  return <main className="shell">
+  return <main className={`shell shell-${activeTab}`}>
     <header className="app-header"><div className="brand-lockup"><img className="brand-logo" src={logoUrl} alt="X-Pilot" /><div><span className="eyebrow">LOCAL-FIRST · MV3</span><h1>X-PILOT</h1><p>مركز التحكم بالنشر</p></div></div><div className="header-status"><span className="header-live-dot" aria-hidden="true" /><span>{engineLabel(runtimeStatus.engineStatus)}</span><StatusBadge status={session?.status ?? 'IDLE'}>{session?.status ?? 'IDLE'}</StatusBadge></div></header>
     <div className="workspace-switcher premium-switcher"><div className="workspace-avatar" aria-hidden="true">{activeWorkspace?.icon ?? '◈'}</div><div className="workspace-switcher-copy"><span className="eyebrow">WORKSPACE ACTIVE</span><strong>{activeWorkspace?.name ?? 'اختر Workspace'}</strong><small>{remaining} عنصر متبقٍ · {published} منشور</small></div><select value={meta?.activeWorkspaceId ?? ''} onChange={(event) => void switchWorkspace(event.target.value)} aria-label="Workspace النشطة">{workspaces.filter((workspace) => !workspace.archived).map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.favorite ? '★ ' : ''}{workspace.name}</option>)}</select><button className="icon-button" onClick={() => setActiveTab('workspaces')} aria-label="إدارة المساحات" title="إدارة المساحات"><Icon name="workspace" /></button></div>
     <nav className="tabs-bar" aria-label="حالة X-Pilot والتبويبات"><div className="tabs" role="tablist">

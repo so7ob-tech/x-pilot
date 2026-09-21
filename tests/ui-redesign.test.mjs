@@ -39,3 +39,12 @@ test('responsive and reduced-motion rules cover the Side Panel range', () => {
   assert.match(css, /prefers-reduced-motion/);
   assert.match(plan, /Do not modify service-worker or domain logic/);
 });
+
+test('operation view keeps Workspace compact and reveals navigation on hover or focus', () => {
+  assert.match(ui, /shell-\$\{activeTab\}/);
+  assert.match(css, /\.shell-operation \.tabs-bar:hover \.tabs/);
+  assert.match(css, /\.shell-operation \.tabs-bar:focus-within \.tabs/);
+  assert.match(css, /\.shell-operation \.premium-switcher/);
+  assert.match(css, /@media \(max-height: 700px\)/);
+  assert.match(css, /\.shell-operation \.countdown/);
+});
