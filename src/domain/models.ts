@@ -43,6 +43,9 @@ export type DryRunMode = 'FIRST_ITEM' | 'ENTIRE_QUEUE';
 export type DryRunSessionStatus = 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'FAILED';
 export interface DryRunItemResult { queueItemId: string; targetUrl: string; status: DryRunItemStatus; checkedAt: number; durationMs: number; pageKind: ContentInspection['pageKind']; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string; error?: string; }
 export interface DryRunResult { id: string; workspaceId?: string; mode: DryRunMode; status: DryRunSessionStatus; startedAt: number; completedAt?: number; currentItemId?: string; total: number; checked: number; ready: number; failed: number; items: DryRunItemResult[]; }
+export interface BackupEnvelope { format: 'x-pilot-backup'; formatVersion: 1; appVersion: string; createdAt: number; meta: AppMetaState; workspaces: WorkspaceState[]; }
+export interface BackupSummary { workspaceCount: number; bankCount: number; queueCount: number; historyCount: number; historicalSessionCount: number; createdAt: number; }
+export interface BackupValidation { valid: boolean; summary?: BackupSummary; errors: string[]; }
 export type RuntimeMessage =
   | { type: 'GET_STATE' } | { type: 'GET_WORKSPACES' } | { type: 'GET_WORKSPACE_STATE'; workspaceId?: string } | { type: 'GET_SESSION_HISTORY'; workspaceId?: string } | { type: 'PREFLIGHT_CHECK'; workspaceId?: string }
   | { type: 'CREATE_WORKSPACE'; name: string; description?: string; color?: string; icon?: string }
@@ -53,6 +56,7 @@ export type RuntimeMessage =
   | { type: 'ARCHIVE_BANK'; workspaceId?: string; bankId: string } | { type: 'RESTORE_BANK'; workspaceId?: string; bankId: string } | { type: 'DELETE_BANK'; workspaceId?: string; bankId: string; confirmed: boolean }
   | { type: 'EXTRACT_BANK'; bankId?: string; bankUrl: string; workspaceId?: string; mode?: 'REPLACE' | 'APPEND' } | { type: 'REFRESH_BANK'; workspaceId?: string; bankId: string } | { type: 'GET_BANK_DIFF'; workspaceId?: string; bankId: string } | { type: 'ADD_DIFF_ITEMS'; workspaceId?: string; bankId: string; itemIds: string[] } | { type: 'DISCARD_BANK_DIFF'; workspaceId?: string; bankId: string }
   | { type: 'START'; confirmed?: boolean; workspaceId?: string } | { type: 'PAUSE'; workspaceId?: string } | { type: 'RESUME'; workspaceId?: string } | { type: 'STOP'; workspaceId?: string } | { type: 'DRY_RUN_FIRST'; workspaceId?: string } | { type: 'DRY_RUN_QUEUE'; workspaceId?: string } | { type: 'DRY_RUN_STOP' } | { type: 'GET_DRY_RUN' }
+  | { type: 'EXPORT_BACKUP' } | { type: 'VALIDATE_BACKUP'; backup: unknown } | { type: 'RESTORE_BACKUP'; backup: unknown; confirmed: boolean }
   | { type: 'SKIP_CURRENT' } | { type: 'RETRY_ITEM'; itemId: string } | { type: 'REORDER'; itemId: string; direction: 'up' | 'down' } | { type: 'DELETE_ITEM'; itemId: string } | { type: 'CLEAR_COMPLETED' } | { type: 'UPDATE_SETTINGS'; settings: Settings; workspaceId?: string };
 export type ContentMessage = { type: 'X_INSPECT' } | { type: 'X_PUBLISH' };
 export interface ContentInspection { ok: boolean; pageKind: 'X' | 'LOGIN' | 'CHALLENGE' | 'ERROR' | 'UNKNOWN'; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string; }

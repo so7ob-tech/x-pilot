@@ -25,6 +25,7 @@
 - Lock منطقي عبر `operationId` ومنع النشر إذا لم يثبت وجود المحرر والمحتوى وزر النشر.
 - سجل Attempts أولي.
 - Dry Run / Test Mode لفحص Composer والمحتوى وزر Post دون النشر، مع اختبار عنصر واحد أو Queue كاملة بالتتابع.
+- Full Backup / Restore محلي بصيغة JSON لجميع Workspaces والبنوك وQueue والسجل والإعدادات، مع تحقق قبل الاستعادة.
 
 ## التطوير
 
