@@ -43,3 +43,11 @@ test('runtime client remains the single Side Panel message bridge', () => {
   const client = read('src/ui/services/runtime-client.ts');
   assert.match(client, /chrome\.runtime\.sendMessage/);
 });
+
+test('bilingual i18n persists a language preference and synchronizes document direction', () => {
+  const i18n = read('src/i18n/index.ts');
+  assert.match(i18n, /UI_PREFERENCES_KEY/);
+  assert.match(i18n, /chrome\?\.storage\?\.local/);
+  assert.match(i18n, /document\.documentElement\.dir/);
+  assert.match(i18n, /resolveLocale/);
+});
