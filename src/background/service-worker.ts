@@ -33,6 +33,12 @@ async function updateRuntimeState(mutator: (state: AppState) => AppState): Promi
   return { workspaceId: saved.workspaceId, queue: saved.queue, session: saved.session, history: saved.history };
 }
 
+async function commitQueueMutation(mutator: (state: AppState) => AppState): Promise<AppState> {
+  const next = await updateRuntimeState(mutator);
+  await broadcast(next);
+  return next;
+}
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === 'loading') injectedContentTabs.delete(tabId);
 });
@@ -848,12 +854,12 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       if (result.workspaceId) await releaseAutomationOwner(result.workspaceId);
       return result;
     }
-    case 'SKIP_CURRENT': return updateRuntimeState((state) => ({ ...state, queue: state.queue.map((item) => item.id === state.session?.currentItemId ? { ...item, status: 'SKIPPED', updatedAt: Date.now() } : item) }));
-    case 'RETRY_ITEM': return updateRuntimeState((state) => ({ ...state, queue: state.queue.map((item) => item.id === message.itemId ? { ...item, status: 'PENDING', attempts: 0, lastError: undefined, updatedAt: Date.now() } : item) }));
-    case 'DELETE_ITEM': return updateRuntimeState((state) => ({ ...state, queue: state.queue.filter((item) => item.id !== message.itemId).map((item, index) => ({ ...item, position: index + 1 })) }));
-    case 'CLEAR_COMPLETED': return updateRuntimeState((state) => ({ ...state, queue: state.queue.filter((item) => !isTerminalItem(item.status)).map((item, index) => ({ ...item, position: index + 1 })) }));
+    case 'SKIP_CURRENT': return commitQueueMutation((state) => ({ ...state, queue: state.queue.map((item) => item.id === state.session?.currentItemId ? { ...item, status: 'SKIPPED', updatedAt: Date.now() } : item) }));
+    case 'RETRY_ITEM': return commitQueueMutation((state) => ({ ...state, queue: state.queue.map((item) => item.id === message.itemId ? { ...item, status: 'PENDING', attempts: 0, lastError: undefined, updatedAt: Date.now() } : item) }));
+    case 'DELETE_ITEM': return commitQueueMutation((state) => ({ ...state, queue: state.queue.filter((item) => item.id !== message.itemId).map((item, index) => ({ ...item, position: index + 1 })) }));
+    case 'CLEAR_COMPLETED': return commitQueueMutation((state) => ({ ...state, queue: state.queue.filter((item) => !isTerminalItem(item.status)).map((item, index) => ({ ...item, position: index + 1 })) }));
     case 'BULK_ACTION': return executeBulkAction(message.workspaceId ?? (await getMeta()).activeWorkspaceId, message.action, message.itemIds, message.confirmed, message.bankId);
-    case 'REORDER': return updateRuntimeState((state) => { const index = state.queue.findIndex((item) => item.id === message.itemId); const target = message.direction === 'up' ? index - 1 : index + 1; if (index < 0 || target < 0 || target >= state.queue.length) return state; const queue = [...state.queue]; [queue[index], queue[target]] = [queue[target], queue[index]]; return { ...state, queue: queue.map((item, position) => ({ ...item, position: position + 1 })) }; });
+    case 'REORDER': return commitQueueMutation((state) => { const index = state.queue.findIndex((item) => item.id === message.itemId); const target = message.direction === 'up' ? index - 1 : index + 1; if (index < 0 || target < 0 || target >= state.queue.length) return state; const queue = [...state.queue]; [queue[index], queue[target]] = [queue[target], queue[index]]; return { ...state, queue: queue.map((item, position) => ({ ...item, position: position + 1 })) }; });
   }
 }
 
