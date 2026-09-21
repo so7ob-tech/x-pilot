@@ -51,7 +51,7 @@ test('UI and README use the official X-Pilot branding asset', () => {
 });
 
 test('Side Panel exposes operation, startup-tests, tweet-bank, sessions, history, analytics, and settings tabs', () => {
-  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'workspaces' \| 'settings'/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'diagnostics' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /aria-label="حالة X-Pilot والتبويبات"/);
   assert.match(uiSource, /label="التشغيل"/);
   assert.match(uiSource, /label="بنك التغريدات"/);
@@ -183,6 +183,20 @@ test('Feature 15 exposes derived Workspace and global Analytics Dashboard metric
   assert.match(uiSource, /calculateWorkspaceAnalytics/);
 });
 
+test('Feature 16 exposes a read-only Diagnostics Center with no publish path', () => {
+  assert.match(models, /DiagnosticsCheckStatus/);
+  assert.match(models, /RUN_DIAGNOSTICS/);
+  assert.match(serviceWorker, /async function runDiagnostics/);
+  assert.match(serviceWorker, /X_INSPECT/);
+  assert.match(serviceWorker, /finally/);
+  assert.match(serviceWorker, /DIAGNOSTICS_INSPECTION_FAILED/);
+  assert.doesNotMatch(serviceWorker.slice(serviceWorker.indexOf('async function runDiagnostics'), serviceWorker.indexOf('function classifyDryRunInspection')), /X_PUBLISH|processCurrentItem|START/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'diagnostics'/);
+  assert.match(uiSource, /label="التشخيص"/);
+  assert.match(uiSource, /Run Diagnostics/);
+  assert.match(uiSource, /لا يضغط Post/);
+});
+
 test('tab bar renders accessible live connection and engine indicators', () => {
   assert.match(uiSource, /GET_RUNTIME_STATUS/);
   assert.match(uiSource, /window\.setInterval\(\(\) => void refreshRuntimeStatus\(\), 1500\)/);
@@ -303,7 +317,7 @@ test('Workspace runtime operations expose explicit ownership and management APIs
   assert.match(serviceWorker, /await claimAutomationOwner\(message\.workspaceId \?\? meta\.activeWorkspaceId\)/);
   assert.match(serviceWorker, /GET_WORKSPACES/);
   assert.match(serviceWorker, /SET_ACTIVE_WORKSPACE/);
-  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'workspaces' \| 'settings'/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'diagnostics' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /function WorkspaceCard/);
 });
 

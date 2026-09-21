@@ -48,8 +48,11 @@ export interface BackupSummary { workspaceCount: number; bankCount: number; queu
 export interface BackupValidation { valid: boolean; summary?: BackupSummary; errors: string[]; }
 export type BulkQueueAction = 'DELETE' | 'SKIP' | 'RETRY' | 'RESET_PENDING' | 'MOVE_TOP' | 'MOVE_BOTTOM' | 'ASSIGN_BANK' | 'EXPORT';
 export interface BulkActionResult { action: BulkQueueAction; requestedIds: string[]; affectedIds: string[]; rejectedIds: string[]; activeItemId?: string; exportedItems?: QueueItem[]; }
+export type DiagnosticsCheckStatus = 'OK' | 'WARN' | 'FAIL' | 'NOT_CHECKED';
+export interface DiagnosticsCheck { id: string; label: string; status: DiagnosticsCheckStatus; message: string; details?: string; }
+export interface DiagnosticsResult { checkedAt: number; extensionVersion: string; schemaVersion: AppMetaState['schemaVersion'] | 'UNKNOWN'; activeWorkspaceId?: string; automationWorkspaceId?: string; runningSession?: { id: string; status: SessionStatus; currentItemId?: string }; alarm?: { name: string; scheduledTime?: number; periodInMinutes?: number }; automationTabId?: number; checks: DiagnosticsCheck[]; safe: boolean; }
 export type RuntimeMessage =
-  | { type: 'GET_STATE' } | { type: 'GET_WORKSPACES' } | { type: 'GET_WORKSPACE_STATE'; workspaceId?: string } | { type: 'GET_SESSION_HISTORY'; workspaceId?: string } | { type: 'PREFLIGHT_CHECK'; workspaceId?: string }
+  | { type: 'GET_STATE' } | { type: 'GET_WORKSPACES' } | { type: 'GET_WORKSPACE_STATE'; workspaceId?: string } | { type: 'GET_SESSION_HISTORY'; workspaceId?: string } | { type: 'PREFLIGHT_CHECK'; workspaceId?: string } | { type: 'RUN_DIAGNOSTICS' }
   | { type: 'CREATE_WORKSPACE'; name: string; description?: string; color?: string; icon?: string } | { type: 'UPDATE_WORKSPACE_PROFILE'; workspaceId: string; profile: Partial<Settings> } | { type: 'CLEAR_WORKSPACE_PROFILE'; workspaceId: string }
   | { type: 'UPDATE_WORKSPACE'; workspaceId: string; patch: Partial<Pick<Workspace, 'name' | 'description' | 'color' | 'icon' | 'favorite'>> }
   | { type: 'ARCHIVE_WORKSPACE'; workspaceId: string } | { type: 'RESTORE_WORKSPACE'; workspaceId: string } | { type: 'DELETE_WORKSPACE'; workspaceId: string; confirmed: boolean }

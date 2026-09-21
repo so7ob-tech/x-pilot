@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0] - Unreleased
+
+### Added
+
+- Read-only Diagnostics Center for Extension version, Storage schema, Workspaces, Session, Alarm, Automation Tab, X Login, Adapter, Composer, Post Button, and Permissions.
+- `Run Diagnostics` uses `X_INSPECT` only and never publishes, changes Queue, or starts automation.
+
 ## [0.16.0] - Unreleased
 
 ### Added
