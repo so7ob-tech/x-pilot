@@ -211,3 +211,19 @@ test('Workspace extraction does not silently overwrite Queue data', () => {
   assert.match(uiSource, /تحتوي Queue على عناصر منشورة/);
   assert.match(uiSource, /onRestore/);
 });
+
+test('Multiple Tweet Banks remain explicit and Workspace-scoped', () => {
+  assert.match(models, /sourceBankId\?: string/);
+  assert.match(models, /description\?: string; url: string; favorite: boolean; archived: boolean/);
+  assert.match(models, /CREATE_BANK/);
+  assert.match(models, /UPDATE_BANK/);
+  assert.match(models, /ARCHIVE_BANK/);
+  assert.match(models, /DELETE_BANK/);
+  assert.match(storage, /export async function listBanks\(workspaceId: string/);
+  assert.match(storage, /export async function createBank\(workspaceId: string/);
+  assert.match(storage, /CANNOT_DELETE_RUNNING_BANK/);
+  assert.match(serviceWorker, /case 'GET_BANKS'/);
+  assert.match(serviceWorker, /sourceBankId: bankId/);
+  assert.match(uiSource, /className=\{`bank-card/);
+  assert.match(uiSource, /إضافة بنك/);
+});

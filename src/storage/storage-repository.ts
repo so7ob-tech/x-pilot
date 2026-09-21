@@ -51,7 +51,7 @@ async function migrateIfNeeded(): Promise<AppMetaState> {
     const updates: Record<string, WorkspaceState> = {};
     for (const id of existing.workspaceOrder) {
       const state = stored[workspaceKey(id)] as WorkspaceState | undefined;
-      if (state) updates[workspaceKey(id)] = { ...state, historicalSessions: state.historicalSessions ?? [] };
+      if (state) updates[workspaceKey(id)] = { ...state, banks: state.banks.map((bank) => ({ ...bank, favorite: bank.favorite ?? false, archived: bank.archived ?? false })), historicalSessions: state.historicalSessions ?? [] };
     }
     await chrome.storage.local.set({ ...updates, [META_KEY]: upgraded });
     return upgraded;
@@ -63,7 +63,8 @@ async function migrateIfNeeded(): Promise<AppMetaState> {
   const workspace = createWorkspaceRecord('مساحة العمل الافتراضية', 'تم ترحيلها تلقائيًا من بيانات X-Pilot السابقة');
   const banks: TweetBank[] = [];
   if (legacyState?.session?.bankUrl) {
-    banks.push({ id: crypto.randomUUID(), workspaceId: workspace.id, name: 'البنك المرحّل', url: legacyState.session.bankUrl, createdAt: Date.now(), updatedAt: Date.now() });
+    const now = Date.now();
+    banks.push({ id: crypto.randomUUID(), workspaceId: workspace.id, name: 'البنك المرحّل', url: legacyState.session.bankUrl, favorite: true, archived: false, createdAt: now, updatedAt: now });
   }
   const migrated = createWorkspaceState(workspace, settings, legacyState ?? {}, banks);
   const meta: AppMetaState = { schemaVersion: 3, activeWorkspaceId: workspace.id, workspaceOrder: [workspace.id], globalSettings: settings };
@@ -78,7 +79,10 @@ export async function getWorkspaceState(workspaceId: string): Promise<WorkspaceS
   const meta = await migrateIfNeeded();
   const result = await chrome.storage.local.get(workspaceKey(workspaceId));
   const stored = result[workspaceKey(workspaceId)] as WorkspaceState | undefined;
-  if (stored) return stored;
+  if (stored) {
+    const normalized = { ...stored, banks: stored.banks.map((bank) => ({ ...bank, favorite: bank.favorite ?? false, archived: bank.archived ?? false })), historicalSessions: stored.historicalSessions ?? [] };
+    return normalized;
+  }
   const workspace = createWorkspaceRecord('مساحة عمل جديدة');
   const fallback = createWorkspaceState({ ...workspace, id: workspaceId }, meta.globalSettings);
   await chrome.storage.local.set({ [workspaceKey(workspaceId)]: fallback });
@@ -141,6 +145,38 @@ export async function setActiveWorkspace(workspaceId: string): Promise<AppMetaSt
   const next = { ...meta, activeWorkspaceId: workspaceId };
   await saveMeta(next);
   return next;
+}
+
+export async function listBanks(workspaceId: string, includeArchived = true): Promise<TweetBank[]> {
+  const state = await getWorkspaceState(workspaceId);
+  return state.banks.filter((bank) => includeArchived || !bank.archived).sort((a, b) => Number(b.favorite) - Number(a.favorite) || b.updatedAt - a.updatedAt);
+}
+export async function createBank(workspaceId: string, name: string, url: string, description = ''): Promise<TweetBank> {
+  const now = Date.now();
+  const bank: TweetBank = { id: crypto.randomUUID(), workspaceId, name: name.trim(), description: description.trim() || undefined, url: url.trim(), favorite: false, archived: false, createdAt: now, updatedAt: now };
+  await updateWorkspaceState(workspaceId, (state) => ({ ...state, banks: [...state.banks, bank] }));
+  return bank;
+}
+export async function updateBank(workspaceId: string, bankId: string, patch: Partial<Pick<TweetBank, 'name' | 'description' | 'url' | 'favorite'>>): Promise<TweetBank> {
+  const state = await getWorkspaceState(workspaceId);
+  const existing = state.banks.find((bank) => bank.id === bankId);
+  if (!existing) throw new Error('BANK_NOT_FOUND');
+  const bank = { ...existing, ...patch, updatedAt: Date.now() };
+  await updateWorkspaceState(workspaceId, (current) => ({ ...current, banks: current.banks.map((item) => item.id === bankId ? bank : item) }));
+  return bank;
+}
+export async function archiveBank(workspaceId: string, bankId: string): Promise<void> {
+  await updateWorkspaceState(workspaceId, (state) => ({ ...state, banks: state.banks.map((bank) => bank.id === bankId ? { ...bank, archived: true, favorite: false, updatedAt: Date.now() } : bank) }));
+}
+export async function restoreBank(workspaceId: string, bankId: string): Promise<void> {
+  await updateWorkspaceState(workspaceId, (state) => ({ ...state, banks: state.banks.map((bank) => bank.id === bankId ? { ...bank, archived: false, updatedAt: Date.now() } : bank) }));
+}
+export async function deleteBank(workspaceId: string, bankId: string, confirmed: boolean): Promise<void> {
+  if (!confirmed) throw new Error('BANK_DELETE_CONFIRMATION_REQUIRED');
+  const state = await getWorkspaceState(workspaceId);
+  if (state.session && ['RUNNING', 'WAITING', 'PAUSED'].includes(state.session.status) && (state.session.bankId === bankId || state.queue.some((item) => item.sourceBankId === bankId))) throw new Error('CANNOT_DELETE_RUNNING_BANK');
+  if (!state.banks.some((bank) => bank.id === bankId)) throw new Error('BANK_NOT_FOUND');
+  await updateWorkspaceState(workspaceId, (current) => ({ ...current, banks: current.banks.filter((bank) => bank.id !== bankId) }));
 }
 
 export async function archiveWorkspace(workspaceId: string): Promise<AppMetaState> {
