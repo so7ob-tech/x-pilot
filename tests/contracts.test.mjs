@@ -79,6 +79,17 @@ test('Service Worker exposes live engine and automation-tab connectivity status'
   assert.match(serviceWorker, /await chrome\.tabs\.get\(session\.automationTabId\)/);
 });
 
+test('Dry Run exposes both modes and does not use the publish action', () => {
+  assert.match(models, /DryRunItemStatus/);
+  assert.match(models, /DRY_RUN_FIRST/);
+  assert.match(models, /DRY_RUN_QUEUE/);
+  assert.match(uiSource, /Test First Item/);
+  assert.match(uiSource, /Test Entire Queue/);
+  const runner = serviceWorker.slice(serviceWorker.indexOf('async function runDryRun'), serviceWorker.indexOf('async function waitForPublishReady'));
+  assert.doesNotMatch(runner, /X_PUBLISH/);
+  assert.doesNotMatch(runner, /addAttempt/);
+});
+
 test('tab bar renders accessible live connection and engine indicators', () => {
   assert.match(uiSource, /GET_RUNTIME_STATUS/);
   assert.match(uiSource, /window\.setInterval\(\(\) => void refreshRuntimeStatus\(\), 1500\)/);

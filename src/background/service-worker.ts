@@ -1,4 +1,4 @@
-import type { AppState, AutomationSession, BankDiffResult, BankSnapshotItem, ContentInspection, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
+import type { AppState, AutomationSession, BankDiffResult, BankSnapshotItem, ContentInspection, DryRunItemResult, DryRunResult, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
 import { createHistoricalSession, defaultSettings } from '../domain/models';
 import { classifyBankDiff, mergeSelectedDiffItems } from '../domain/bank-diff';
 import { fingerprintTweet } from '../domain/content-fingerprint';
@@ -14,6 +14,8 @@ const AUTOMATION_TAB_KEY = 'automationTabId';
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const injectedContentTabs = new Set<number>();
 const contentInjectionInFlight = new Map<number, Promise<void>>();
+const DRY_RUN_KEY = 'xPilotDryRunResult';
+let dryRunStopRequested = false;
 
 async function getState(): Promise<AppState> {
   const owner = await getAutomationOwner();
@@ -160,6 +162,65 @@ async function inspectTab(tabId: number): Promise<ContentInspection> {
   } catch {
     await ensureContentScript(tabId);
     return await chrome.tabs.sendMessage(tabId, { type: 'X_INSPECT' });
+  }
+}
+
+function classifyDryRunInspection(inspection: ContentInspection): DryRunItemResult['status'] {
+  if (inspection.pageKind === 'LOGIN') return 'LOGIN_REQUIRED';
+  if (inspection.pageKind === 'CHALLENGE') return 'CHALLENGE_DETECTED';
+  if (!inspection.contentPresent) return 'CONTENT_MISSING';
+  if (!inspection.composerFound || !inspection.postButtonFound || !inspection.postButtonEnabled) return 'POST_BUTTON_NOT_FOUND';
+  return 'READY';
+}
+
+async function saveDryRun(result: DryRunResult): Promise<DryRunResult> {
+  await chrome.storage.local.set({ [DRY_RUN_KEY]: result });
+  await broadcast();
+  return result;
+}
+
+async function runDryRun(mode: 'FIRST_ITEM' | 'ENTIRE_QUEUE', workspaceId?: string): Promise<DryRunResult> {
+  const state = await (workspaceId ? getWorkspaceState(workspaceId) : getState());
+  const selected = state.queue.filter((item) => item.status === 'PENDING' || item.status === 'FAILED').slice(0, mode === 'FIRST_ITEM' ? 1 : undefined);
+  const result: DryRunResult = { id: crypto.randomUUID(), workspaceId: state.workspaceId, mode, status: 'RUNNING', startedAt: Date.now(), total: selected.length, checked: 0, ready: 0, failed: 0, items: [] };
+  dryRunStopRequested = false;
+  await saveDryRun(result);
+  let tabId: number | undefined;
+  let previousActiveTabId: number | undefined;
+  try {
+    if (!selected.length) return saveDryRun({ ...result, status: 'COMPLETED', completedAt: Date.now() });
+    if (!state.session) throw new Error('AUTOMATION_SESSION_NOT_FOUND');
+    tabId = await getOrCreateAutomationTab(state.session);
+    previousActiveTabId = await getPreviousActiveTabId(tabId);
+    for (const item of selected) {
+      if (dryRunStopRequested) break;
+      const started = Date.now();
+      let itemResult: DryRunItemResult;
+      try {
+        const parsed = new URL(item.targetUrl);
+        if (!['http:', 'https:'].includes(parsed.protocol) || !/(^|\.)x\.com$|(^|\.)twitter\.com$/i.test(parsed.hostname)) throw new Error('INVALID_URL');
+        await chrome.tabs.update(tabId, { url: item.targetUrl, active: false });
+        await waitForTabLoad(tabId);
+        await activateAutomationTab(tabId);
+        await wait(300);
+        const inspection = await inspectTab(tabId);
+        itemResult = { queueItemId: item.id, targetUrl: item.targetUrl, status: classifyDryRunInspection(inspection), checkedAt: Date.now(), durationMs: Date.now() - started, pageKind: inspection.pageKind, composerFound: inspection.composerFound, contentPresent: inspection.contentPresent, postButtonFound: inspection.postButtonFound, postButtonEnabled: inspection.postButtonEnabled, reason: inspection.reason };
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+        itemResult = { queueItemId: item.id, targetUrl: item.targetUrl, status: reason === 'INVALID_URL' ? 'INVALID_URL' : 'ERROR', checkedAt: Date.now(), durationMs: Date.now() - started, pageKind: 'ERROR', composerFound: false, contentPresent: false, postButtonFound: false, postButtonEnabled: false, reason, error: reason };
+      }
+      result.items.push(itemResult);
+      result.checked = result.items.length;
+      result.ready = result.items.filter((entry) => entry.status === 'READY').length;
+      result.failed = result.checked - result.ready;
+      result.currentItemId = item.id;
+      await saveDryRun({ ...result });
+    }
+    return saveDryRun({ ...result, status: dryRunStopRequested ? 'STOPPED' : 'COMPLETED', completedAt: Date.now(), currentItemId: undefined });
+  } catch {
+    return saveDryRun({ ...result, status: 'FAILED', completedAt: Date.now(), currentItemId: undefined });
+  } finally {
+    await restoreActiveTab(previousActiveTabId);
   }
 }
 
@@ -432,6 +493,17 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
       return performPreflight(workspaceId);
     }
+    case 'GET_DRY_RUN': {
+      const stored = await chrome.storage.local.get(DRY_RUN_KEY);
+      return stored[DRY_RUN_KEY] ?? null;
+    }
+    case 'DRY_RUN_STOP':
+      dryRunStopRequested = true;
+      return chrome.storage.local.get(DRY_RUN_KEY).then((stored) => stored[DRY_RUN_KEY] ?? null);
+    case 'DRY_RUN_FIRST':
+      return runDryRun('FIRST_ITEM', message.workspaceId ?? (await getMeta()).activeWorkspaceId);
+    case 'DRY_RUN_QUEUE':
+      return runDryRun('ENTIRE_QUEUE', message.workspaceId ?? (await getMeta()).activeWorkspaceId);
     case 'CREATE_WORKSPACE': return createWorkspace(message.name, message.description, message.color, message.icon);
     case 'UPDATE_WORKSPACE': return updateWorkspace(message.workspaceId, message.patch);
     case 'ARCHIVE_WORKSPACE': return archiveWorkspace(message.workspaceId);

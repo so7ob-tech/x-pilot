@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.11.0] - Unreleased
+
+### Added
+
+- Dry Run / Test Mode for one item or the entire Queue.
+- Sequential reuse of one automation tab for inspection.
+- Structured results for login, content, Composer, Post button, invalid URL, challenge, and error states.
+- Strict no-publish boundary: Dry Run never sends `X_PUBLISH`, changes Queue status, increments attempts, or creates publish history.
+
 ## [0.10.0] - Unreleased
 
 ### Added
