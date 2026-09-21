@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.0] - Unreleased
+
+### Added
+
+- Adds real Workspace entities with independent Queue, Banks, Sessions, and History.
+- Adds persisted active Workspace selection and a compact Workspace management tab.
+- Adds schema version 2 migration from `xQueueState` and `xQueueSettings`.
+- Adds a single global automation owner to prevent parallel Workspace sessions.
+- Makes background state reads and writes use the persisted automation owner instead of the active UI Workspace.
+
 ## [0.4.1] - Unreleased
 
 ### Added
