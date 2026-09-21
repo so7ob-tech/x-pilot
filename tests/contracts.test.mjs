@@ -71,20 +71,20 @@ test('UI and README use the official X-Pilot branding asset', () => {
 
 test('Side Panel exposes operation, startup-tests, tweet-bank, sessions, history, analytics, and settings tabs', () => {
   assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'diagnostics' \| 'workspaces' \| 'settings'/);
-  assert.match(uiSource, /aria-label="حالة X-Pilot والتبويبات"/);
-  assert.match(uiSource, /label="التشغيل"/);
-  assert.match(uiSource, /label="بنك التغريدات"/);
-  assert.match(uiSource, /label="الإعدادات"/);
+  assert.match(uiSource, /aria-label=\{t\('nav\.operation'\)\}/);
+  assert.match(uiSource, /label=\{t\('nav\.operation'\)\}/);
+  assert.match(uiSource, /label=\{t\('nav\.banks'\)\}/);
+  assert.match(uiSource, /label=\{t\('nav\.settings'\)\}/);
   assert.match(uiSource, /useState<TabId>\('operation'\)/);
-  assert.match(uiSource, /label="اختبارات البدء"/);
-  assert.match(uiSource, /label="التحليلات"/);
+  assert.match(uiSource, /label=\{t\('nav\.startupTests'\)\}/);
+  assert.match(uiSource, /label=\{t\('nav\.analytics'\)\}/);
 });
 
 test('operation tab includes current-tweet information and existing controls', () => {
   assert.match(uiSource, /export function CurrentTweetCard/);
-  assert.match(uiSource, /التغريدة الحالية/);
+  assert.match(uiSource, /CurrentTweetCard/);
   assert.match(uiSource, /getTweetPreview\(item\.targetUrl, item\.label, 180\)/);
-  assert.match(uiSource, /aria-label="التشغيل"/);
+  assert.match(uiSource, /aria-label=\{t\('nav\.operation'\)\}/);
   assert.match(uiSource, /onClick=\{start\}/);
   assert.match(uiSource, /type: 'PAUSE'/);
   assert.match(uiSource, /type: 'RESUME'/);
@@ -104,8 +104,8 @@ test('Dry Run exposes both modes and does not use the publish action', () => {
   assert.match(models, /DryRunItemStatus/);
   assert.match(models, /DRY_RUN_FIRST/);
   assert.match(models, /DRY_RUN_QUEUE/);
-  assert.match(uiSource, /Test First Item/);
-  assert.match(uiSource, /Test Entire Queue/);
+  assert.match(uiSource, /runDryRunFirst/);
+  assert.match(uiSource, /runDryRunQueue/);
   const runner = serviceWorker.slice(serviceWorker.indexOf('async function runDryRun'), serviceWorker.indexOf('async function waitForPublishReady'));
   assert.doesNotMatch(runner, /X_PUBLISH/);
   assert.doesNotMatch(runner, /addAttempt/);
@@ -244,17 +244,17 @@ test('Feature 16 exposes a read-only Diagnostics Center with no publish path', (
   assert.match(serviceWorker, /DIAGNOSTICS_INSPECTION_FAILED/);
   assert.doesNotMatch(serviceWorker.slice(serviceWorker.indexOf('async function runDiagnostics'), serviceWorker.indexOf('function classifyDryRunInspection')), /X_PUBLISH|processCurrentItem|START/);
   assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'diagnostics'/);
-  assert.match(uiSource, /label="التشخيص"/);
-  assert.match(uiSource, /Run Diagnostics/);
-  assert.match(uiSource, /لا يضغط Post/);
+  assert.match(uiSource, /label=\{t\('nav\.diagnostics'\)\}/);
+  assert.match(uiSource, /diagnostics\.run/);
+  assert.match(uiSource, /diagnostics\.readOnly/);
 });
 
 test('tab bar renders accessible live connection and engine indicators', () => {
   assert.match(uiSource, /GET_RUNTIME_STATUS/);
   assert.match(uiSource, /window\.setInterval\(\(\) => void refreshRuntimeStatus\(\), 1500\)/);
   assert.match(uiSource, /function StatusIndicator/);
-  assert.match(uiSource, /connectionLabel\(runtimeStatus\.connection\)/);
-  assert.match(uiSource, /engineLabel\(runtimeStatus\.engineStatus\)/);
+  assert.match(uiSource, /statuses\.\$\{runtimeStatus\.connection\}/);
+  assert.match(uiSource, /statuses\.\$\{runtimeStatus\.engineStatus\}/);
   assert.match(uiSource, /aria-live="polite"/);
   assert.match(uiSource, /runtime-warning/);
 });
