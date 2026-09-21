@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.19.3] - Patch
+
+### Fixed
+
+- Fixed invalid SVG `<path>` errors caused by splitting a valid path definition into invalid fragments.
+- Restored reliable rendering and interaction for navigation, Workspace, Queue, Bank, operation, and action buttons.
+- Added a regression contract preventing SVG path splitting from returning.
+
 ## [0.19.2] - Patch
 
 ### Fixed

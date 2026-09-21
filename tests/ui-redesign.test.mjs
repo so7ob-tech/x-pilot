@@ -13,6 +13,8 @@ test('premium UI uses semantic design tokens and shared primitives', () => {
   assert.match(components, /export function Button/);
   assert.match(components, /export function StatusBadge/);
   assert.match(components, /export function ProgressBar/);
+  assert.match(components, /<path d=\{paths\[name\]\} \/>/);
+  assert.doesNotMatch(components, /paths\[name\]\.split/);
 });
 
 test('navigation remains feature-complete while using grouped information architecture', () => {
