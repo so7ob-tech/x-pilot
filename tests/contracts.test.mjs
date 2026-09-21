@@ -89,3 +89,24 @@ test('bank extraction always removes its temporary tab in finally', () => {
   assert.match(serviceWorker, /let bankTabId: number \| undefined/);
   assert.match(serviceWorker, /finally \{[\s\S]*if \(bankTabId\) await chrome\.tabs\.remove\(bankTabId\)\.catch/);
 });
+
+test('automation tab cleanup respects settings and clears persisted references', () => {
+  assert.match(serviceWorker, /async function closeAutomationTabIfConfigured\(session: AutomationSession\)/);
+  assert.match(serviceWorker, /session\.closeTabOnComplete \|\| !session\.keepAutomationTabOpen/);
+  assert.match(serviceWorker, /await chrome\.tabs\.remove\(tabId\)\.catch/);
+  assert.match(serviceWorker, /await chrome\.storage\.local\.remove\(AUTOMATION_TAB_KEY\)/);
+  assert.match(serviceWorker, /automationTabId: undefined/);
+});
+
+test('manual automation-tab removal clears only the matching session reference', () => {
+  assert.match(serviceWorker, /chrome\.tabs\.onRemoved\.addListener\(\(tabId\) => \{/);
+  assert.match(serviceWorker, /state\.session\?\.automationTabId !== tabId/);
+  assert.match(serviceWorker, /current\.session\?\.automationTabId === tabId/);
+});
+
+test('stop and completion paths clean the configured automation tab', () => {
+  assert.match(serviceWorker, /case 'STOP': \{[\s\S]*closeAutomationTabIfConfigured/);
+  assert.match(serviceWorker, /const visibleState = nextStatus === 'COMPLETED' && nextState\.session/);
+  assert.match(serviceWorker, /const visibleState = completed\.session \? await closeAutomationTabIfConfigured/);
+  assert.match(serviceWorker, /if \(current\.session\?\.status !== 'RUNNING' \|\| latestItem\?\.operationId !== operationId\)/);
+});
