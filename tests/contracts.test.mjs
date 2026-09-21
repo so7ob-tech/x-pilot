@@ -23,6 +23,7 @@ const models = fs.readFileSync(path.join(root, 'src/domain/models.ts'), 'utf8');
 const storage = fs.readFileSync(path.join(root, 'src/storage/storage-repository.ts'), 'utf8');
 const pagination = fs.readFileSync(path.join(root, 'src/domain/pagination.ts'), 'utf8');
 const errorMessages = fs.readFileSync(path.join(root, 'src/ui/services/error-messages.ts'), 'utf8');
+const styles = fs.readFileSync(path.join(root, 'src/ui/styles.css'), 'utf8');
 
  test('package and manifest versions stay synchronized', () => {
   assert.equal(packageJson.version, manifest.version);
@@ -440,6 +441,16 @@ test('Queue exposes selectable page sizes and previous/next pagination', () => {
   assert.match(uiSource, /pagination-controls/);
   assert.match(uiSource, /setQueuePage\(\(current\) => Math\.max\(1, current - 1\)\)/);
   assert.match(uiSource, /setQueuePage\(\(current\) => Math\.min\(queuePageCount, current \+ 1\)\)/);
+});
+
+test('Settings and Backup cards use the shared card radius and aligned action layout', () => {
+  assert.match(uiSource, /settings-card/);
+  assert.match(uiSource, /profile-actions/);
+  assert.match(uiSource, /backup-actions/);
+  assert.match(styles, /\.settings-card \{ display: grid; gap: 14px; \}/);
+  assert.match(styles, /\.settings-card \.publishing-windows-editor, \.settings-card \.profile-actions, \.settings-card \.backup-actions/);
+  assert.match(styles, /\.settings-card \.profile-actions \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
+  assert.match(styles, /\.settings-card \.backup-actions \.controls-row \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)/);
 });
 
 test('daily-limit internal code is translated only at the UI presentation boundary', () => {
