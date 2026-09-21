@@ -6,6 +6,7 @@ import { getTweetPreview } from '../extraction/tweet-preview';
 import './styles.css';
 
 const initialState: AppState = { queue: [], session: null, history: [] };
+type TabId = 'operation' | 'queue' | 'settings';
 
 function send(message: RuntimeMessage): Promise<any> { return chrome.runtime.sendMessage(message); }
 
@@ -15,14 +16,15 @@ function App() {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [notice, setNotice] = useState('');
   const [nowMs, setNowMs] = useState(Date.now());
+  const [activeTab, setActiveTab] = useState<TabId>('operation');
   const session = state.session;
   const published = useMemo(() => state.queue.filter((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED').length, [state.queue]);
   const failed = useMemo(() => state.queue.filter((item) => item.status === 'FAILED').length, [state.queue]);
   const remaining = state.queue.length - published - failed;
+  const currentItem = session?.currentItemId ? state.queue.find((item) => item.id === session.currentItemId) : undefined;
   const countdownSeconds = session?.status === 'WAITING' && session.nextRunAt ? Math.max(0, Math.ceil((session.nextRunAt - nowMs) / 1000)) : 0;
   const canPause = session?.status === 'RUNNING' || session?.status === 'WAITING';
   const canResume = session?.status === 'PAUSED';
-  const showRecovery = Boolean(session?.status === 'PAUSED' && remaining > 0);
   const logoUrl = chrome.runtime.getURL('branding/x-pilot-logo.png');
 
   const refresh = async () => { const next = await send({ type: 'GET_STATE' }); if (next && !next.error) setState(next); };
@@ -44,18 +46,40 @@ function App() {
   };
   const start = async () => { if (settings.confirmBeforeStart && !window.confirm(`بدء نشر ${remaining} عنصر؟`)) return; await act({ type: 'START', confirmed: true }, 'بدأت الجلسة'); };
   const updateSettings = async (next: Settings) => { setSettings(next); await act({ type: 'UPDATE_SETTINGS', settings: next }); };
+
   return <main className="shell">
     <header className="brand-header"><div className="brand-lockup"><img className="brand-logo" src={logoUrl} alt="X-Pilot" /><div><span className="eyebrow">LOCAL-FIRST · MV3</span><h1>قائمة نشر X</h1></div></div><span className={`status status-${session?.status ?? 'IDLE'}`}>{session?.status ?? 'IDLE'}</span></header>
+    <nav className="tabs" aria-label="تبويبات X-Pilot" role="tablist">
+      <TabButton id="operation" activeTab={activeTab} onSelect={setActiveTab} icon="▶" label="التشغيل" />
+      <TabButton id="queue" activeTab={activeTab} onSelect={setActiveTab} icon="☷" label="بنك التغريدات" />
+      <TabButton id="settings" activeTab={activeTab} onSelect={setActiveTab} icon="⚙" label="الإعدادات" />
+    </nav>
     {notice && <div className="notice">{notice}</div>}
-    <section className="card"><h2>بنك التغريدات</h2><div className="row"><input value={bankUrl} onChange={(event) => setBankUrl(event.target.value)} placeholder="https://example.com/tweet-bank" dir="ltr" /><button onClick={extract}>استخراج الروابط</button></div><p className="muted">سيتم فتح البنك محليًا واستخراج روابط X وTwitter الفريدة حسب ترتيب ظهورها.</p></section>
-    <section className="stats"><div><b>{state.queue.length}</b><span>الإجمالي</span></div><div><b>{published}</b><span>منشور</span></div><div><b>{failed}</b><span>فشل</span></div><div><b>{remaining}</b><span>متبقٍ</span></div></section>
-    <section className="card controls"><h2>التشغيل</h2><div className="row"><button className="primary" onClick={start} disabled={!state.queue.length || canPause || canResume}>Start</button><button onClick={() => act({ type: 'PAUSE' }, 'تم إيقاف Queue مؤقتًا')} disabled={!canPause}>Pause</button><button onClick={() => act({ type: 'RESUME' }, 'تم استئناف Queue')} disabled={!canResume}>Resume</button><button className="danger" onClick={() => act({ type: 'STOP' }, 'تم إيقاف Queue نهائيًا')} disabled={!session || session.status === 'STOPPED' || session.status === 'COMPLETED'}>Stop</button></div><p className="muted">العنصر الحالي: {session?.currentItemId ? state.queue.find((item) => item.id === session.currentItemId)?.position ?? '-' : '-'}</p>{session?.status === 'PAUSED' && <p className="paused-hint">Queue متوقف مؤقتًا — اضغط Resume للمتابعة.</p>}{session?.status === 'WAITING' && <div className="countdown"><span>التغريدة التالية بعد</span><strong>{formatCountdown(countdownSeconds)}</strong></div>}</section>
-    {showRecovery && <section className="card recovery-card"><div className="recovery-brand"><img src={logoUrl} alt="" /><div><span className="eyebrow">X-PILOT RECOVERY</span><h2>استعادة Queue</h2></div></div><p className="muted">توجد عناصر غير مكتملة من جلسة سابقة. يمكنك استئناف النشر أو إبقاء Queue متوقفة.</p><button className="primary" onClick={() => void act({ type: 'RESUME' }, 'تم استئناف Queue')}>استئناف Queue</button></section>}
-    <section className="card settings-card"><div className="settings-heading"><img src={logoUrl} alt="" /><div><span className="eyebrow">X-PILOT SETTINGS</span><h2>الإعدادات</h2></div></div><label>الفاصل بالدقائق<input type="number" min="0.5" step="0.5" value={settings.intervalMinutes} onChange={(event) => void updateSettings({ ...settings, intervalMinutes: Number(event.target.value) })} /></label><label>Maximum Retry Attempts<input type="number" min="0" max="10" value={settings.maxRetries} onChange={(event) => void updateSettings({ ...settings, maxRetries: Number(event.target.value) })} /></label><label className="check"><input type="checkbox" checked={settings.confirmBeforeStart} onChange={(event) => void updateSettings({ ...settings, confirmBeforeStart: event.target.checked })} /> تأكيد قبل بدء Queue</label></section>
-    <section className="card"><div className="section-heading"><h2>Queue</h2><button onClick={() => act({ type: 'CLEAR_COMPLETED' })}>Clear Completed</button></div><div className="queue">{state.queue.map((item) => <QueueRow key={item.id} item={item} onAction={act} />)}{!state.queue.length && <p className="muted">لم تُستخرج روابط بعد.</p>}</div></section>
+
+    {activeTab === 'operation' && <section className="tab-panel" role="tabpanel" aria-label="التشغيل">
+      <section className="card"><div className="section-heading"><h2>لوحة التشغيل</h2><span className="session-progress">{published} منشور · {remaining} متبقٍ</span></div><div className="stats"><div><b>{state.queue.length}</b><span>الإجمالي</span></div><div><b>{published}</b><span>منشور</span></div><div><b>{failed}</b><span>فشل</span></div><div><b>{remaining}</b><span>متبقٍ</span></div></div></section>
+      <CurrentTweetCard item={currentItem} position={session?.currentIndex} logoUrl={logoUrl} />
+      {session?.status === 'PAUSED' && remaining > 0 && <RecoveryCard logoUrl={logoUrl} onResume={() => void act({ type: 'RESUME' }, 'تم استئناف Queue')} />}
+      <section className="card controls"><h2>التشغيل</h2><div className="row controls-row"><button className="primary" onClick={start} disabled={!state.queue.length || canPause || canResume}>Start</button><button onClick={() => void act({ type: 'PAUSE' }, 'تم إيقاف Queue مؤقتًا')} disabled={!canPause}>Pause</button><button onClick={() => void act({ type: 'RESUME' }, 'تم استئناف Queue')} disabled={!canResume}>Resume</button><button className="danger" onClick={() => void act({ type: 'STOP' }, 'تم إيقاف Queue نهائيًا')} disabled={!session || session.status === 'STOPPED' || session.status === 'COMPLETED'}>Stop</button></div><p className="muted">العنصر الحالي: {session?.currentItemId ? currentItem?.position ?? '-' : '-'}</p>{session?.status === 'PAUSED' && <p className="paused-hint">Queue متوقف مؤقتًا — اضغط Resume للمتابعة.</p>}{session?.status === 'WAITING' && <div className="countdown"><span>التغريدة التالية بعد</span><strong>{formatCountdown(countdownSeconds)}</strong></div>}</section>
+    </section>}
+
+    {activeTab === 'queue' && <section className="tab-panel" role="tabpanel" aria-label="بنك التغريدات وقائمة Queue">
+      <section className="card"><h2>بنك التغريدات</h2><div className="row bank-row"><input value={bankUrl} onChange={(event) => setBankUrl(event.target.value)} placeholder="https://example.com/tweet-bank" dir="ltr" /><button onClick={() => void extract()}>استخراج الروابط</button></div><p className="muted">سيتم فتح البنك محليًا واستخراج روابط X وTwitter الفريدة حسب ترتيب ظهورها.</p></section>
+      <section className="card"><div className="section-heading"><h2>Queue</h2><span className="session-progress">{state.queue.length} عنصر</span><button onClick={() => void act({ type: 'CLEAR_COMPLETED' })}>Clear Completed</button></div><div className="queue">{state.queue.map((item) => <QueueRow key={item.id} item={item} onAction={act} />)}{!state.queue.length && <p className="muted">لم تُستخرج روابط بعد.</p>}</div></section>
+    </section>}
+
+    {activeTab === 'settings' && <section className="tab-panel" role="tabpanel" aria-label="الإعدادات">
+      <section className="card settings-card"><div className="settings-heading"><img src={logoUrl} alt="" /><div><span className="eyebrow">X-PILOT SETTINGS</span><h2>الإعدادات</h2></div></div><label>الفاصل بالدقائق<input type="number" min="0.5" step="0.5" value={settings.intervalMinutes} onChange={(event) => void updateSettings({ ...settings, intervalMinutes: Number(event.target.value) })} /></label><label>Maximum Retry Attempts<input type="number" min="0" max="10" value={settings.maxRetries} onChange={(event) => void updateSettings({ ...settings, maxRetries: Number(event.target.value) })} /></label><label className="check"><input type="checkbox" checked={settings.confirmBeforeStart} onChange={(event) => void updateSettings({ ...settings, confirmBeforeStart: event.target.checked })} /> تأكيد قبل بدء Queue</label><label className="check"><input type="checkbox" checked={settings.keepAutomationTabOpen} onChange={(event) => void updateSettings({ ...settings, keepAutomationTabOpen: event.target.checked })} /> إبقاء تبويب الأتمتة مفتوحًا</label><label className="check"><input type="checkbox" checked={settings.closeTabOnComplete} onChange={(event) => void updateSettings({ ...settings, closeTabOnComplete: event.target.checked })} /> إغلاق التبويب عند اكتمال Queue</label></section>
+    </section>}
     <footer>لا تُخزن بيانات الدخول ولا تُرسل البيانات إلى Backend. عند ظهور Login أو CAPTCHA أو تحدٍ أمني تتوقف الإضافة.</footer>
   </main>;
 }
+
+function TabButton({ id, activeTab, onSelect, icon, label }: { id: TabId; activeTab: TabId; onSelect: (id: TabId) => void; icon: string; label: string }) { return <button className={`tab-button ${activeTab === id ? 'active' : ''}`} role="tab" aria-selected={activeTab === id} onClick={() => onSelect(id)}><span aria-hidden="true">{icon}</span>{label}</button>; }
+
+function CurrentTweetCard({ item, position, logoUrl }: { item?: QueueItem; position?: number; logoUrl: string }) { return <section className="card current-card"><div className="current-heading"><div className="current-brand"><img src={logoUrl} alt="" /><div><span className="eyebrow">CURRENT TWEET</span><h2>التغريدة الحالية</h2></div></div>{item && <span className={`item-status status-${item.status}`}>{item.status}</span>}</div>{item ? <><p className="current-preview" dir="auto">{getTweetPreview(item.targetUrl, item.label, 180)}</p><div className="current-meta"><span>العنصر {position ?? item.position}</span><span>المحاولات {item.attempts}</span>{item.startedAt && <span>بدأت {new Date(item.startedAt).toLocaleTimeString('ar')}</span>}</div>{item.lastError && <p className="error-text">آخر خطأ: {item.lastError}</p>}<a className="primary-link" href={item.targetUrl} target="_blank" rel="noreferrer">فتح رابط التغريدة</a></> : <p className="muted">لا توجد تغريدة قيد التشغيل حاليًا. ابدأ Queue من تبويب التشغيل.</p>}</section>; }
+
+function RecoveryCard({ logoUrl, onResume }: { logoUrl: string; onResume: () => void }) { return <section className="card recovery-card"><div className="current-brand"><img src={logoUrl} alt="" /><div><span className="eyebrow">X-PILOT RECOVERY</span><h2>استعادة Queue</h2></div></div><p className="muted">توجد عناصر غير مكتملة من جلسة سابقة. يمكنك استئناف النشر من العنصر الحالي.</p><button className="primary" onClick={onResume}>استئناف Queue</button></section>; }
 
 function formatCountdown(totalSeconds: number): string { const hours = Math.floor(totalSeconds / 3600); const minutes = Math.floor((totalSeconds % 3600) / 60); const seconds = totalSeconds % 60; return hours > 0 ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`; }
 function pad(value: number): string { return String(value).padStart(2, '0'); }

@@ -5,16 +5,13 @@ body { margin: 0; min-width: 360px; }
 header, .section-heading, .row, .stats, .queue-row { display: flex; align-items: center; gap: 10px; }
 header, .section-heading { justify-content: space-between; }
 .brand-header { align-items: flex-start; }
-.brand-lockup, .settings-heading, .recovery-brand { display: flex; align-items: center; gap: 10px; }
+.brand-lockup, .settings-heading, .current-brand { display: flex; align-items: center; gap: 10px; }
 .brand-logo { width: 48px; height: 48px; object-fit: contain; }
-.settings-heading img, .recovery-brand img { width: 36px; height: 36px; object-fit: contain; }
+.settings-heading img, .current-brand img { width: 36px; height: 36px; object-fit: contain; }
 h1 { margin: 4px 0 18px; font-size: 26px; }
 h2 { margin: 0 0 14px; font-size: 17px; }
 .eyebrow { color: #58708f; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
 .card { background: white; border: 1px solid #dce4ef; border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: 0 6px 20px #193a5b0b; }
-.settings-card, .recovery-card { border-color: #d9e5fb; }
-.settings-heading, .recovery-brand { margin-bottom: 12px; }
-.recovery-card p { margin: 0 0 12px; }
 input { width: 100%; border: 1px solid #cbd6e3; border-radius: 10px; padding: 10px 12px; font: inherit; background: #fff; }
 .row input { flex: 1; }
 label { display: block; font-size: 13px; font-weight: 700; margin-top: 12px; }
@@ -28,8 +25,14 @@ button.primary { color: white; border-color: #1c65d1; background: #1c65d1; }
 button.danger { color: #a42020; }
 .notice { padding: 10px 12px; border-radius: 10px; color: #214a75; background: #e6f1ff; margin-bottom: 14px; }
 .muted, footer { color: #6b7b91; font-size: 12px; line-height: 1.6; }
-.stats { margin-bottom: 14px; }
-.stats div { flex: 1; background: #fff; border: 1px solid #dce4ef; border-radius: 14px; padding: 12px; text-align: center; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 5px; margin: 0 0 14px; background: #e8eef7; border-radius: 13px; }
+.tab-button { border: 0; background: transparent; color: #5f7087; padding: 10px 8px; font-size: 12px; font-weight: 800; }
+.tab-button span { margin-left: 5px; }
+.tab-button.active { color: #145dcc; background: #fff; box-shadow: 0 2px 9px #193a5b18; }
+.tab-panel { min-height: 220px; }
+.session-progress { color: #6b7b91; font-size: 11px; white-space: nowrap; }
+.stats { margin-bottom: 0; }
+.stats div { flex: 1; background: #fff; border: 1px solid #dce4ef; border-radius: 14px; padding: 12px 8px; text-align: center; }
 .stats b, .stats span { display: block; }
 .stats b { font-size: 22px; }
 .stats span { color: #6b7b91; font-size: 11px; margin-top: 3px; }
@@ -38,6 +41,21 @@ button.danger { color: #a42020; }
 .status-PAUSED, .status-WAITING { color: #785400; background: #fff0c6; }
 .status-COMPLETED { color: #075d2d; background: #d9f6e4; }
 .status-IDLE, .status-STOPPED { color: #53667e; background: #e9eff6; }
+.current-card { border-color: #cbdcf7; background: linear-gradient(145deg, #fff, #f7fbff); }
+.recovery-card { border-color: #d9e5fb; background: #fbfdff; }
+.current-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.current-heading h2 { margin: 2px 0 0; }
+.current-brand img { flex: 0 0 auto; }
+.item-status { border-radius: 999px; padding: 5px 8px; color: #53667e; background: #e9eff6; font-size: 10px; font-weight: 800; }
+.current-preview { margin: 16px 0 10px; color: #1d2d45; font-size: 15px; line-height: 1.7; }
+.current-meta { display: flex; flex-wrap: wrap; gap: 8px; color: #6b7b91; font-size: 11px; }
+.error-text { margin: 10px 0; color: #a42020; font-size: 12px; }
+.primary-link { display: inline-block; margin-top: 12px; color: #175fbe; font-size: 12px; font-weight: 800; }
+.controls-row { flex-wrap: wrap; }
+.paused-hint { margin: 12px 0 0; padding: 9px 11px; border-radius: 10px; color: #745100; background: #fff7df; font-size: 12px; }
+.countdown { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: #fff7df; color: #745100; }
+.countdown span { font-size: 12px; }
+.countdown strong { direction: ltr; font-variant-numeric: tabular-nums; font-size: 22px; letter-spacing: .05em; }
 .queue { display: grid; gap: 8px; }
 .queue-row { align-items: flex-start; border-top: 1px solid #edf1f6; padding-top: 9px; }
 .position { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; background: #eef4fb; color: #3b587a; border-radius: 50%; font-size: 12px; }
@@ -47,8 +65,6 @@ button.danger { color: #a42020; }
 .item-main small { display: block; color: #7c8ca0; margin-top: 4px; font-size: 11px; }
 .item-actions { display: flex; flex: 0 0 auto; gap: 4px; }
 .item-actions button { flex: 0 0 auto; padding: 5px 8px; }
-.countdown { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: #fff7df; color: #745100; }
-.countdown span { font-size: 12px; }
-.countdown strong { direction: ltr; font-variant-numeric: tabular-nums; font-size: 22px; letter-spacing: .05em; }
-.paused-hint { margin: 12px 0 0; padding: 9px 11px; border-radius: 10px; color: #745100; background: #fff7df; font-size: 12px; }
+.settings-card { border-color: #d9e5fb; }
 footer { margin: 16px 2px 6px; }
+@media (max-width: 520px) { .shell { padding: 14px; } .tab-button { font-size: 11px; padding-inline: 4px; } .stats { gap: 5px; } .stats b { font-size: 19px; } .bank-row { align-items: stretch; flex-direction: column; } .bank-row button { width: 100%; } }

@@ -48,6 +48,26 @@ test('UI and README use the official X-Pilot branding asset', () => {
   assert.match(readme, /public\/icons/);
 });
 
+test('Side Panel exposes operation, tweet-bank, and settings tabs', () => {
+  assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'settings'/);
+  assert.match(uiSource, /aria-label="تبويبات X-Pilot"/);
+  assert.match(uiSource, /label="التشغيل"/);
+  assert.match(uiSource, /label="بنك التغريدات"/);
+  assert.match(uiSource, /label="الإعدادات"/);
+  assert.match(uiSource, /useState<TabId>\('operation'\)/);
+});
+
+test('operation tab includes current-tweet information and existing controls', () => {
+  assert.match(uiSource, /function CurrentTweetCard/);
+  assert.match(uiSource, /التغريدة الحالية/);
+  assert.match(uiSource, /getTweetPreview\(item\.targetUrl, item\.label, 180\)/);
+  assert.match(uiSource, /aria-label="التشغيل"/);
+  assert.match(uiSource, /onClick=\{start\}/);
+  assert.match(uiSource, /type: 'PAUSE'/);
+  assert.match(uiSource, /type: 'RESUME'/);
+  assert.match(uiSource, /type: 'STOP'/);
+});
+
 test('failed Continue path schedules the next item and its countdown alarm', () => {
   assert.match(serviceWorker, /const nextRunAt = !exhausted \|\| nextItem \? Date\.now\(\) \+ session\.intervalMinutes/);
   assert.match(serviceWorker, /nextItem \? 'WAITING'/);

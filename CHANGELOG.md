@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0] - Unreleased
+
+### Added
+
+- Splits the Side Panel into Operation, Tweet Bank, and Settings tabs.
+- Adds a dashboard with current-tweet information, status, preview, attempts, and direct link.
+- Keeps the Queue and bank extraction tools together in their dedicated tab.
+- Preserves the branded Recovery card in the Operation tab.
+
 ## [0.3.7] - Unreleased
 
 ### Added
