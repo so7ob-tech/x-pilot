@@ -1,6 +1,6 @@
 # X-Pilot
 
-> **v1.0.1:** تم تبسيط Workspace Filter إلى `All Workspaces` أو أسماء المساحات الفعلية، مع مزامنة تلقائية مع Workspace الرئيسية.
+> **v1.0.2:** تم إصلاح صلاحية النطاق المطلوبة عند استخدام تحديث ومقارنة بنك التغريدات لأول مرة.
 
 <p align="center">
   <img src="public/branding/x-pilot-logo.png" alt="X-Pilot logo" width="180" />
