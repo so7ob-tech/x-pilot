@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.0] - Unreleased
+
+### Added
+
+- Data Architecture v4 with separate App Metadata, Global Settings, Workspace Settings, Automation Runtime, Session Records, Publish Attempts, and canonical Queue/Bank stores.
+- Idempotent migration from schema v3 without deleting legacy keys during the initial migration.
+- Backup format v2 that includes durable records and excludes Chrome runtime resources.
+
 ## [0.17.0] - Unreleased
 
 ### Added
