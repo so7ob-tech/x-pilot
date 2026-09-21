@@ -121,12 +121,21 @@ button.danger { color: #a42020; }
 .countdown span { font-size: 12px; }
 .countdown strong { direction: ltr; font-variant-numeric: tabular-nums; font-size: 22px; letter-spacing: .05em; }
 .queue { display: grid; gap: 8px; }
+.bulk-select-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding: 8px 10px; border: 1px solid #dce7f5; border-radius: 10px; background: #f8fbff; color: #53667e; font-size: 11px; }
+.bulk-select-row .check { margin: 0; }
+.bulk-select-row .check input { width: auto; }
+.bulk-actions { display: grid; gap: 8px; margin-top: 9px; padding: 10px; border: 1px solid #b7d2f5; border-radius: 11px; background: #eef6ff; color: #214a75; font-size: 12px; }
+.bulk-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
+.bulk-buttons button, .bulk-buttons select { padding: 6px 8px; font-size: 11px; }
+.bulk-buttons select { border: 1px solid #c5d1df; border-radius: 9px; background: #fff; font: inherit; }
 .history-list { display: grid; gap: 8px; }
 .history-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #edf1f6; }
 .history-row:last-child { border-bottom: 0; }
 .history-row small { display: block; margin-top: 3px; color: #6b7b91; }
 .history-counts { display: flex; gap: 8px; color: #53667e; font-size: 11px; white-space: nowrap; }
 .queue-row { align-items: flex-start; border-top: 1px solid #edf1f6; padding-top: 9px; min-width: 0; flex-wrap: wrap; }
+.queue-row-selected { border-radius: 10px; border-color: #8bb5ed; background: #f8fbff; padding: 9px; }
+.queue-select { width: auto; margin: 5px 0 0; flex: 0 0 auto; }
 .dry-run-preview { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #3c4a5c; }
 .position { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; background: #eef4fb; color: #3b587a; border-radius: 50%; font-size: 12px; }
 .item-main { min-width: 0; flex: 1; }

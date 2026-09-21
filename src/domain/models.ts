@@ -46,6 +46,8 @@ export interface DryRunResult { id: string; workspaceId?: string; mode: DryRunMo
 export interface BackupEnvelope { format: 'x-pilot-backup'; formatVersion: 1; appVersion: string; createdAt: number; meta: AppMetaState; workspaces: WorkspaceState[]; }
 export interface BackupSummary { workspaceCount: number; bankCount: number; queueCount: number; historyCount: number; historicalSessionCount: number; createdAt: number; }
 export interface BackupValidation { valid: boolean; summary?: BackupSummary; errors: string[]; }
+export type BulkQueueAction = 'DELETE' | 'SKIP' | 'RETRY' | 'RESET_PENDING' | 'MOVE_TOP' | 'MOVE_BOTTOM' | 'ASSIGN_BANK' | 'EXPORT';
+export interface BulkActionResult { action: BulkQueueAction; requestedIds: string[]; affectedIds: string[]; rejectedIds: string[]; activeItemId?: string; exportedItems?: QueueItem[]; }
 export type RuntimeMessage =
   | { type: 'GET_STATE' } | { type: 'GET_WORKSPACES' } | { type: 'GET_WORKSPACE_STATE'; workspaceId?: string } | { type: 'GET_SESSION_HISTORY'; workspaceId?: string } | { type: 'PREFLIGHT_CHECK'; workspaceId?: string }
   | { type: 'CREATE_WORKSPACE'; name: string; description?: string; color?: string; icon?: string } | { type: 'UPDATE_WORKSPACE_PROFILE'; workspaceId: string; profile: Partial<Settings> } | { type: 'CLEAR_WORKSPACE_PROFILE'; workspaceId: string }
@@ -57,7 +59,7 @@ export type RuntimeMessage =
   | { type: 'EXTRACT_BANK'; bankId?: string; bankUrl: string; workspaceId?: string; mode?: 'REPLACE' | 'APPEND' } | { type: 'REFRESH_BANK'; workspaceId?: string; bankId: string } | { type: 'GET_BANK_DIFF'; workspaceId?: string; bankId: string } | { type: 'ADD_DIFF_ITEMS'; workspaceId?: string; bankId: string; itemIds: string[] } | { type: 'DISCARD_BANK_DIFF'; workspaceId?: string; bankId: string }
   | { type: 'START'; confirmed?: boolean; workspaceId?: string } | { type: 'SCHEDULE'; startAt: number; workspaceId?: string } | { type: 'RESCHEDULE'; startAt: number; workspaceId?: string } | { type: 'CANCEL_SCHEDULE'; workspaceId?: string } | { type: 'PAUSE'; workspaceId?: string } | { type: 'RESUME'; workspaceId?: string } | { type: 'STOP'; workspaceId?: string } | { type: 'DRY_RUN_FIRST'; workspaceId?: string } | { type: 'DRY_RUN_QUEUE'; workspaceId?: string } | { type: 'DRY_RUN_STOP' } | { type: 'GET_DRY_RUN' }
   | { type: 'EXPORT_BACKUP' } | { type: 'VALIDATE_BACKUP'; backup: unknown } | { type: 'RESTORE_BACKUP'; backup: unknown; confirmed: boolean }
-  | { type: 'SKIP_CURRENT' } | { type: 'RETRY_ITEM'; itemId: string } | { type: 'REORDER'; itemId: string; direction: 'up' | 'down' } | { type: 'DELETE_ITEM'; itemId: string } | { type: 'CLEAR_COMPLETED' } | { type: 'UPDATE_SETTINGS'; settings: Settings; workspaceId?: string };
+  | { type: 'SKIP_CURRENT' } | { type: 'RETRY_ITEM'; itemId: string } | { type: 'REORDER'; itemId: string; direction: 'up' | 'down' } | { type: 'DELETE_ITEM'; itemId: string } | { type: 'CLEAR_COMPLETED' } | { type: 'BULK_ACTION'; action: BulkQueueAction; itemIds: string[]; workspaceId?: string; bankId?: string; confirmed?: boolean } | { type: 'UPDATE_SETTINGS'; settings: Settings; workspaceId?: string };
 export type ContentMessage = { type: 'X_INSPECT' } | { type: 'X_PUBLISH' };
 export interface ContentInspection { ok: boolean; pageKind: 'X' | 'LOGIN' | 'CHALLENGE' | 'ERROR' | 'UNKNOWN'; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string; }
 

@@ -1,4 +1,4 @@
-import type { AppState, AutomationSession, BankDiffResult, BankSnapshotItem, ContentInspection, DryRunItemResult, DryRunResult, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
+import type { AppState, AutomationSession, BankDiffResult, BankSnapshotItem, BulkActionResult, BulkQueueAction, ContentInspection, DryRunItemResult, DryRunResult, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
 import { createHistoricalSession, defaultSettings } from '../domain/models';
 import { classifyBankDiff, mergeSelectedDiffItems } from '../domain/bank-diff';
 import { fingerprintTweet } from '../domain/content-fingerprint';
@@ -7,6 +7,7 @@ import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
 import { getNextAllowedPublishingTime } from '../domain/scheduling';
+import { applyBulkStatus, reorderSelected } from '../domain/bulk-queue';
 import { addAttempt, archiveBank, claimAutomationOwner, clearWorkspaceProfile, createBank, createWorkspace, deleteBank, deleteWorkspace, exportBackup, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceSettings, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, restoreBank, restoreBackup, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceProfile, updateWorkspaceState, archiveWorkspace, restoreWorkspace, validateBackup } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
@@ -543,6 +544,35 @@ async function handleScheduledStart(): Promise<void> {
   await processCurrentItem();
 }
 
+async function executeBulkAction(workspaceId: string, action: BulkQueueAction, itemIds: string[], confirmed = false, bankId?: string): Promise<BulkActionResult & { state?: AppState }> {
+  const state = await getWorkspaceState(workspaceId);
+  const requestedIds = [...new Set(itemIds)];
+  const selected = state.queue.filter((item) => requestedIds.includes(item.id));
+  const activeItemId = state.session && ['RUNNING', 'WAITING', 'PAUSED'].includes(state.session.status) ? state.session.currentItemId : undefined;
+  if (activeItemId && requestedIds.includes(activeItemId) && !confirmed) throw new Error(`BULK_ACTIVE_ITEM_CONFIRMATION_REQUIRED:${activeItemId}`);
+  const active = selected.find((item) => item.id === activeItemId);
+  if (active?.status === 'PUBLISHING') throw new Error('BULK_ACTIVE_ITEM_BUSY');
+  if (action === 'ASSIGN_BANK') {
+    const bank = state.banks.find((candidate) => candidate.id === bankId && !candidate.archived);
+    if (!bank) throw new Error('BULK_BANK_NOT_FOUND_OR_ARCHIVED');
+  }
+  if (action === 'EXPORT') return { action, requestedIds, affectedIds: selected.map((item) => item.id), rejectedIds: requestedIds.filter((id) => !selected.some((item) => item.id === id)), exportedItems: selected };
+  const selectedIds = selected.map((item) => item.id);
+  let nextQueue: QueueItem[];
+  if (action === 'DELETE') nextQueue = state.queue.filter((item) => !selectedIds.includes(item.id));
+  else if (action === 'MOVE_TOP') nextQueue = reorderSelected(state.queue, selectedIds, 'TOP');
+  else if (action === 'MOVE_BOTTOM') nextQueue = reorderSelected(state.queue, selectedIds, 'BOTTOM');
+  else if (action === 'ASSIGN_BANK') {
+    const bank = state.banks.find((candidate) => candidate.id === bankId)!;
+    nextQueue = state.queue.map((item) => selectedIds.includes(item.id) ? { ...item, sourceBankId: bank.id, sourceBankUrl: bank.url, updatedAt: Date.now() } : item);
+  } else nextQueue = applyBulkStatus(state.queue, selectedIds, action);
+  nextQueue = nextQueue.map((item, index) => ({ ...item, position: index + 1 }));
+  const saved = await updateWorkspaceState(workspaceId, (current) => ({ ...current, queue: nextQueue, session: current.session ? { ...current.session, total: nextQueue.length, currentIndex: nextQueue.find((item) => item.id === current.session?.currentItemId)?.position ?? current.session.currentIndex, updatedAt: Date.now() } : current.session }));
+  const result: BulkActionResult & { state?: AppState } = { action, requestedIds, affectedIds: selectedIds, rejectedIds: requestedIds.filter((id) => !selectedIds.includes(id)), activeItemId, state: { workspaceId: saved.workspaceId, queue: saved.queue, session: saved.session, history: saved.history } };
+  await broadcast(result.state);
+  return result;
+}
+
 async function handleMessage(message: RuntimeMessage): Promise<unknown> {
   switch (message.type) {
     case 'GET_STATE': return getActiveState();
@@ -723,6 +753,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     case 'RETRY_ITEM': return updateRuntimeState((state) => ({ ...state, queue: state.queue.map((item) => item.id === message.itemId ? { ...item, status: 'PENDING', attempts: 0, lastError: undefined, updatedAt: Date.now() } : item) }));
     case 'DELETE_ITEM': return updateRuntimeState((state) => ({ ...state, queue: state.queue.filter((item) => item.id !== message.itemId).map((item, index) => ({ ...item, position: index + 1 })) }));
     case 'CLEAR_COMPLETED': return updateRuntimeState((state) => ({ ...state, queue: state.queue.filter((item) => !isTerminalItem(item.status)).map((item, index) => ({ ...item, position: index + 1 })) }));
+    case 'BULK_ACTION': return executeBulkAction(message.workspaceId ?? (await getMeta()).activeWorkspaceId, message.action, message.itemIds, message.confirmed, message.bankId);
     case 'REORDER': return updateRuntimeState((state) => { const index = state.queue.findIndex((item) => item.id === message.itemId); const target = message.direction === 'up' ? index - 1 : index + 1; if (index < 0 || target < 0 || target >= state.queue.length) return state; const queue = [...state.queue]; [queue[index], queue[target]] = [queue[target], queue[index]]; return { ...state, queue: queue.map((item, position) => ({ ...item, position: position + 1 })) }; });
   }
 }
