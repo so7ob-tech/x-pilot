@@ -274,10 +274,17 @@ async function runDryRun(mode: 'FIRST_ITEM' | 'ENTIRE_QUEUE', workspaceId?: stri
   await saveDryRun(result);
   let tabId: number | undefined;
   let previousActiveTabId: number | undefined;
+  let temporaryTab = false;
   try {
     if (!selected.length) return saveDryRun({ ...result, status: 'COMPLETED', completedAt: Date.now() });
-    if (!state.session) throw new Error('AUTOMATION_SESSION_NOT_FOUND');
-    tabId = await getOrCreateAutomationTab(state.session);
+    if (state.session) {
+      tabId = await getOrCreateAutomationTab(state.session);
+    } else {
+      const temporary = await chrome.tabs.create({ url: 'about:blank', active: false });
+      if (!temporary.id) throw new Error('DRY_RUN_TAB_CREATE_FAILED');
+      tabId = temporary.id;
+      temporaryTab = true;
+    }
     previousActiveTabId = await getPreviousActiveTabId(tabId);
     for (const item of selected) {
       if (dryRunStopRequested) break;
@@ -304,10 +311,12 @@ async function runDryRun(mode: 'FIRST_ITEM' | 'ENTIRE_QUEUE', workspaceId?: stri
       await saveDryRun({ ...result });
     }
     return saveDryRun({ ...result, status: dryRunStopRequested ? 'STOPPED' : 'COMPLETED', completedAt: Date.now(), currentItemId: undefined });
-  } catch {
-    return saveDryRun({ ...result, status: 'FAILED', completedAt: Date.now(), currentItemId: undefined });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'DRY_RUN_FAILED';
+    return saveDryRun({ ...result, status: 'FAILED', error: reason, completedAt: Date.now(), currentItemId: undefined });
   } finally {
     await restoreActiveTab(previousActiveTabId);
+    if (temporaryTab && tabId !== undefined) await chrome.tabs.remove(tabId).catch(() => undefined);
   }
 }
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.19.1] - Patch
+
+### Fixed
+
+- Dry Run no longer fails immediately when the Workspace has Queue items but no active Automation Session.
+- Dry Run now creates a temporary X tab, waits for navigation, injects the Content Script, inspects Composer/content/Post readiness, and removes the temporary tab in `finally`.
+- Dry Run surfaces the actual startup error instead of only showing `FAILED`.
+- The no-Post and no-attempt-mutation boundaries remain unchanged.
+
 ## [0.19.0] - Unreleased
 
 ### Added

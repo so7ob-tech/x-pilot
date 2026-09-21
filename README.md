@@ -37,6 +37,7 @@
 - يستخدم التخزين مفاتيح منطقية منفصلة داخل `chrome.storage.local`، مع سجل Migrations صريح وقياس أداء مؤقت لا يحفظ محتوى التغريدات أو الروابط.
 - يتضمن Data Integrity guards لحالات حذف Bank أو Workspace، Restart أثناء النشر أو WAITING، Alarms قديمة، Sessions قديمة، Queue Items منشورة، Duplicate Fingerprints، Records تالفة، وحقول ناقصة.
 - في v0.19.0 أُعيد تصميم Side Panel كواجهة Premium RTL: Header موحد، Workspace context، Navigation مجمعة، Operation Hero، Progress، Status Badges، أيقونات SVG محلية، Design Tokens، Responsive layout، وDark Mode يعتمد على نفس النظام.
+- في v0.19.1 يعالج Dry Run حالة الفشل المبكر عند عدم وجود Automation Session؛ ينشئ تبويب X مؤقتًا، يفحص Composer والمحتوى وزر Post، ثم ينظف التبويب في `finally` دون نشر أو زيادة Attempts.
 
 ## التطوير
 
