@@ -86,6 +86,20 @@ button.danger { color: #a42020; }
 .status-COMPLETED { color: #075d2d; background: #d9f6e4; }
 .status-IDLE, .status-STOPPED { color: #53667e; background: #e9eff6; }
 .current-card { border-color: #cbdcf7; background: linear-gradient(145deg, #fff, #f7fbff); }
+.preflight-card { border-color: #cbd5e1; }
+.preflight-card.preflight-ready { border-color: #22c55e; }
+.preflight-card.preflight-blocked { border-color: #ef4444; }
+.preflight-summary { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 10px; border-radius: 10px; background: #f8fafc; }
+.preflight-summary strong { color: #0f172a; }
+.preflight-summary span { color: #64748b; font-size: 12px; }
+.preflight-checks { display: grid; gap: 6px; margin-top: 10px; }
+.preflight-check { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; font-size: 12px; }
+.preflight-check > span { font-weight: 800; }
+.preflight-check div { display: grid; gap: 2px; }
+.preflight-check small { color: #64748b; }
+.preflight-pass { background: #f0fdf4; color: #166534; }
+.preflight-warn { background: #fffbeb; color: #92400e; }
+.preflight-fail { background: #fef2f2; color: #991b1b; }
 .recovery-card { border-color: #d9e5fb; background: #fbfdff; }
 .current-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .current-heading h2 { margin: 2px 0 0; }
