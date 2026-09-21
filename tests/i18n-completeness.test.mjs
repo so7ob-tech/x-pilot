@@ -42,12 +42,13 @@ test('Preflight domain output is language-neutral and renderable in both locales
 
 test('reported Queue, session, history, analytics, workspace, and settings labels resolve in both locales', () => {
   const keys = [
-    'ui.remaining', 'banks.hint', 'banks.count', 'queue.count', 'queue.pageSize', 'queue.selectPage',
+    'ui.remaining', 'banks.hint', 'banks.count', 'queue.count', 'queue.range', 'queue.pageOf', 'queue.pageSize', 'queue.selectPage',
     'sessions.eyebrow', 'sessions.count', 'sessions.noMatch',
     'history.eyebrow', 'history.count', 'history.noMatch', 'analytics.eyebrow',
     'analytics.derivedHint', 'analytics.totalWorkspaces', 'analytics.totalPublished',
     'analytics.totalFailures', 'analytics.sessionsOverTime', 'analytics.workspaceComparison',
     'analytics.noSessions', 'workspaces.activeSummary', 'settings.badge', 'backup.hint',
+    'diagnostics.storageCheck', 'diagnostics.schemaVersionDetail', 'diagnostics.permissionsDetail', 'diagnostics.noAlarmRequired',
   ];
   for (const locale of ['ar', 'en']) {
     for (const key of keys) {
