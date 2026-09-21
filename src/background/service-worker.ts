@@ -6,7 +6,7 @@ import { runPreflight } from '../domain/preflight';
 import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
-import { addAttempt, archiveBank, claimAutomationOwner, createBank, createWorkspace, deleteBank, deleteWorkspace, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, restoreBank, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceState, archiveWorkspace, restoreWorkspace } from '../storage/storage-repository';
+import { addAttempt, archiveBank, claimAutomationOwner, createBank, createWorkspace, deleteBank, deleteWorkspace, exportBackup, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, restoreBank, restoreBackup, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceState, archiveWorkspace, restoreWorkspace, validateBackup } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
 const bankDiffs = new Map<string, BankDiffResult>();
@@ -496,6 +496,18 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     case 'GET_DRY_RUN': {
       const stored = await chrome.storage.local.get(DRY_RUN_KEY);
       return stored[DRY_RUN_KEY] ?? null;
+    }
+    case 'EXPORT_BACKUP':
+      return exportBackup();
+    case 'VALIDATE_BACKUP':
+      return validateBackup(message.backup);
+    case 'RESTORE_BACKUP': {
+      const current = await getState();
+      if (current.session && ['RUNNING', 'WAITING', 'PAUSED'].includes(current.session.status)) throw new Error('BACKUP_RESTORE_WHILE_AUTOMATION_ACTIVE');
+      const summary = await restoreBackup(message.backup, message.confirmed);
+      const restored = await getState();
+      await broadcast(restored);
+      return { ...restored, backupSummary: summary };
     }
     case 'DRY_RUN_STOP':
       dryRunStopRequested = true;

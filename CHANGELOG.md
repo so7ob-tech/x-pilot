@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.12.0] - Unreleased
+
+### Added
+
+- Full local JSON Backup / Restore for all Workspaces, Tweet Banks, Queue items, Sessions, Session History, Publish Attempts, and settings.
+- Pre-restore validation for format, schema, workspace ordering, bank references, Queue references, and active automation protection.
+- Confirmation summary before replacing local data.
+- Excludes transient Automation Tab and operation state from backups.
+
 ## [0.11.0] - Unreleased
 
 ### Added

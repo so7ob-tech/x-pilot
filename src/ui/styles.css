@@ -129,6 +129,10 @@ button.danger { color: #a42020; }
 .item-actions { display: flex; flex: 0 0 auto; gap: 4px; }
 .item-actions button { flex: 0 0 auto; padding: 5px 8px; }
 .settings-card { border-color: #d9e5fb; }
+.backup-actions { margin-top: 18px; padding-top: 16px; border-top: 1px solid #e5edf8; }
+.backup-actions h3 { margin: 0 0 5px; font-size: 14px; }
+.button-like { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; border: 1px solid #cbd8e8; border-radius: 9px; background: #fff; color: #1d2d45; font-size: 12px; font-weight: 700; cursor: pointer; }
+.button-like input { display: none; }
 .workspace-list { display: grid; gap: 10px; }
 .workspace-card { border: 1px solid #dce4ef; border-radius: 14px; padding: 13px; background: #fff; }
 .workspace-card.active { border-color: #8bb5ed; box-shadow: 0 4px 15px #1c65d118; }
