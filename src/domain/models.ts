@@ -15,7 +15,7 @@ export interface AutomationSession {
   intervalMinutes: number; maxRetries: number; failureBehavior: FailureBehavior; confirmBeforeStart: boolean;
   keepAutomationTabOpen: boolean; closeTabOnComplete: boolean; version: number; updatedAt: number; historicalSessionId?: string;
 }
-export interface PublishAttempt {
+export interface LegacyPublishAttempt {
   id: string; workspaceId?: string; sessionId?: string; queueItemId: string; link: string; timestamp: number;
   attemptNumber: number; action: string; result: string; error?: string;
 }
@@ -24,7 +24,7 @@ export interface HistoricalSession {
   status: HistoricalSessionStatus; totalItems: number; publishedCount: number; failedCount: number; skippedCount: number;
   intervalMinutes: number; maxRetries: number; failureBehavior: FailureBehavior; createdAt: number; updatedAt: number; failureReason?: string;
 }
-export interface AppState { workspaceId?: string; queue: QueueItem[]; session: AutomationSession | null; history: PublishAttempt[]; }
+export interface AppState { workspaceId?: string; queue: QueueItem[]; session: AutomationSession | null; history: LegacyPublishAttempt[]; }
 export interface Workspace { id: string; name: string; description: string; color?: string; icon?: string; favorite: boolean; archived: boolean; automationProfile?: Partial<import('./scheduling').WorkspaceAutomationProfile>; createdAt: number; updatedAt: number; lastActivityAt: number; }
 export interface TweetBank { id: string; workspaceId: string; name: string; description?: string; url: string; favorite: boolean; archived: boolean; createdAt: number; updatedAt: number; lastExtractedAt?: number; lastExtractedCount?: number; lastSnapshot?: BankSnapshotItem[]; lastSnapshotAt?: number; }
 export interface BankSnapshotItem { url: string; label?: string; contentFingerprint?: string; normalizedContent?: string; }
@@ -33,7 +33,15 @@ export interface BankDiffItem extends BankSnapshotItem { id: string; category: B
 export interface BankDiffResult { workspaceId: string; bankId: string; refreshedAt: number; items: BankDiffItem[]; selectedNewIds: string[]; }
 export interface WorkspaceState extends AppState { workspaceId: string; workspace: Workspace; banks: TweetBank[]; historicalSessions: HistoricalSession[]; }
 export interface Settings { intervalMinutes: number; maxRetries: number; failureBehavior: FailureBehavior; confirmBeforeStart: boolean; keepAutomationTabOpen: boolean; closeTabOnComplete: boolean; duplicatePolicy: DuplicatePolicy; publishingWindows: import('./scheduling').PublishingWindow[]; timezone: string; notificationsEnabled: boolean; badgeMode: import('./scheduling').BadgeMode; }
-export interface AppMetaState { schemaVersion: 2 | 3; activeWorkspaceId: string; automationWorkspaceId?: string; workspaceOrder: string[]; globalSettings: Settings; }
+export interface AppMetaState { schemaVersion: 2 | 3 | 4; activeWorkspaceId: string; automationWorkspaceId?: string; workspaceOrder: string[]; globalSettings: Settings; appVersion?: string; createdAt?: number; updatedAt?: number; }
+export interface AppMetadata { schemaVersion: 4; appVersion: string; activeWorkspaceId: string; automationWorkspaceId?: string; workspaceOrder: string[]; createdAt: number; updatedAt: number; }
+export interface GlobalSettings extends Settings { updatedAt: number; }
+export interface WorkspaceSettings { workspaceId: string; overrides: Partial<Omit<Settings, 'updatedAt'>>; createdAt: number; updatedAt: number; }
+export interface AutomationSessionRuntime { workspaceId: string; sessionId: string; bankId?: string; bankUrl?: string; status: SessionStatus; currentItemId?: string; currentIndex: number; total: number; startedAt?: number; scheduledStartAt?: number; pausedAt?: number; completedAt?: number; nextRunAt?: number; automationTabId?: number; alarmName?: string; operationId?: string; updatedAt: number; version: number; }
+export interface AutomationSessionRecord extends HistoricalSession { scheduledStartAt?: number; timezone: string; }
+export interface BankSnapshot { id: string; bankId: string; workspaceId: string; capturedAt: number; items: BankSnapshotItem[]; }
+export interface PublishAttempt extends Omit<LegacyPublishAttempt, 'link' | 'action' | 'result' | 'error'> { targetUrl?: string; link?: string; action: string; result: string; error?: string; errorCode?: string; errorMessage?: string; durationMs?: number; adapter?: string; }
+export interface LegacyPublishAttempt { id: string; workspaceId?: string; sessionId?: string; queueItemId: string; link: string; timestamp: number; attemptNumber: number; action: string; result: string; error?: string; }
 export const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false, duplicatePolicy: 'BLOCK', publishingWindows: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', notificationsEnabled: true, badgeMode: 'COUNT' };
 export type AutomationConnection = 'CONNECTED' | 'DISCONNECTED' | 'NOT_REQUIRED';
 export interface RuntimeStatus { engineStatus: SessionStatus; connection: AutomationConnection; automationTabId?: number; automationWorkspaceId?: string; checkedAt: number; }
@@ -43,7 +51,7 @@ export type DryRunMode = 'FIRST_ITEM' | 'ENTIRE_QUEUE';
 export type DryRunSessionStatus = 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'FAILED';
 export interface DryRunItemResult { queueItemId: string; position: number; targetUrl: string; status: DryRunItemStatus; checkedAt: number; durationMs: number; pageKind: ContentInspection['pageKind']; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string; error?: string; }
 export interface DryRunResult { id: string; workspaceId?: string; mode: DryRunMode; status: DryRunSessionStatus; startedAt: number; completedAt?: number; currentItemId?: string; total: number; checked: number; ready: number; failed: number; items: DryRunItemResult[]; }
-export interface BackupEnvelope { format: 'x-pilot-backup'; formatVersion: 1; appVersion: string; createdAt: number; meta: AppMetaState; workspaces: WorkspaceState[]; }
+export interface BackupEnvelope { format: 'x-pilot-backup'; formatVersion: 1 | 2; appVersion: string; createdAt: number; meta: AppMetaState; globalSettings?: Settings; workspaceSettings?: WorkspaceSettings[]; workspaces: WorkspaceState[]; sessionRecords?: AutomationSessionRecord[]; attempts?: PublishAttempt[]; }
 export interface BackupSummary { workspaceCount: number; bankCount: number; queueCount: number; historyCount: number; historicalSessionCount: number; createdAt: number; }
 export interface BackupValidation { valid: boolean; summary?: BackupSummary; errors: string[]; }
 export type BulkQueueAction = 'DELETE' | 'SKIP' | 'RETRY' | 'RESET_PENDING' | 'MOVE_TOP' | 'MOVE_BOTTOM' | 'ASSIGN_BANK' | 'EXPORT';

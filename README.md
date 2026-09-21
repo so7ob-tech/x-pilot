@@ -33,6 +33,7 @@
 - Bulk Queue Actions لتحديد عدة عناصر وتنفيذ Delete وSkip وRetry وReset to Pending والتحريك والتعيين والتصدير، مع حماية العنصر الجاري.
 - Analytics Dashboard لعرض مؤشرات كل Workspace ومؤشرات X-Pilot العامة مشتقة مباشرة من Sessions وHistory دون تخزين مكرر.
 - Diagnostics Center لفحص الإصدار والتخزين والـAlarm والتبويب وX Login وComposer وPost Button والصلاحيات باستخدام فحص قراءة فقط دون نشر.
+- Data Architecture v4 تفصل Runtime التشغيلي عن Session Records وPublish Attempts والإعدادات، مع Migration آمن من schema v3 وBackup format v2.
 
 ## التطوير
 
@@ -74,7 +75,7 @@ npm run build
 
 يحتوي X-Pilot الآن على مساحات عمل مستقلة لكل مشروع. لكل Workspace Queue وبنوك تغريدات وجلسة وسجل محاولات خاص بها، مع إمكانية التبديل من أعلى Side Panel. تبقى الأتمتة Runtime عالمية بمالك واحد فقط في كل لحظة، لذلك لا يمكن تشغيل Workspace ثانية أثناء تشغيل Workspace أخرى، بينما يمكن تصفح بياناتها غير التشغيلية.
 
-تستخدم Workspaces مخطط تخزين محليًا بإصدار `schemaVersion: 2`. عند التحديث من إصدار قديم، تُرحّل مفاتيح `xQueueState` و`xQueueSettings` إلى Workspace افتراضية باسم **مساحة العمل الافتراضية** دون حذف البيانات القديمة قبل نجاح الترحيل. راجع [دليل Workspaces](docs/workspaces.md) للتفاصيل.
+تستخدم Workspaces مخطط تخزين محليًا بإصدار `schemaVersion: 4`. يحتفظ النموذج الجديد بمفاتيح مستقلة للـRuntime والإعدادات وQueue وSession Records وPublish Attempts. عند التحديث من إصدار قديم، تُرحّل مفاتيح `xQueueState` و`xQueueSettings` إلى Workspace افتراضية باسم **مساحة العمل الافتراضية** دون حذف البيانات القديمة أثناء عملية الترحيل الأولى. راجع [مقترح Data Architecture](docs/data-architecture.md) للتفاصيل.
 
 ## القيود المعروفة في هذه المرحلة
 
