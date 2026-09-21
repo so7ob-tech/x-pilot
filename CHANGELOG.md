@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0] - Unreleased
+
+### Added
+
+- Adds independent Tweet Bank management inside each Workspace.
+- Adds Bank creation, archive, restore, deletion protection, and metadata cards.
+- Adds Bank-aware extraction and `sourceBankId` provenance on Queue items.
+- Adds per-Bank Pending and Published counters while preserving Replace and Append modes.
+- Normalizes legacy schema v3 Bank records with default favorite and archive fields.
+
 ## [0.6.0] - Unreleased
 
 ### Added

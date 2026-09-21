@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "X-Pilot",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "X-Pilot: إدارة محلية لقائمة روابط تجهيز منشورات X مع جدولة واستمرارية.",
   "minimum_chrome_version": "114",
   "permissions": ["storage", "alarms", "tabs", "scripting", "sidePanel", "activeTab"],

@@ -3,7 +3,7 @@ import { createHistoricalSession, defaultSettings } from '../domain/models';
 import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
-import { addAttempt, claimAutomationOwner, createWorkspace, deleteWorkspace, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceState, listWorkspaces, releaseAutomationOwner, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceState, archiveWorkspace, restoreWorkspace } from '../storage/storage-repository';
+import { addAttempt, archiveBank, claimAutomationOwner, createBank, createWorkspace, deleteBank, deleteWorkspace, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, restoreBank, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceState, archiveWorkspace, restoreWorkspace } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
 const AUTOMATION_TAB_KEY = 'automationTabId';
@@ -289,7 +289,7 @@ async function advanceSession(): Promise<void> {
   await processCurrentItem();
 }
 
-async function extractBank(bankUrl: string, workspaceId: string, mode: 'REPLACE' | 'APPEND' = 'REPLACE'): Promise<AppState> {
+async function extractBank(bankUrl: string, workspaceId: string, mode: 'REPLACE' | 'APPEND' = 'REPLACE', bankId?: string): Promise<AppState> {
   let bankTabId: number | undefined;
   try {
     const tab = await chrome.tabs.create({ url: bankUrl, active: false });
@@ -306,7 +306,7 @@ async function extractBank(bankUrl: string, workspaceId: string, mode: 'REPLACE'
     ]);
     const extractedQueue: QueueItem[] = [];
     for (const extracted of extraction.links) {
-      extractedQueue.push({ id: crypto.randomUUID(), workspaceId, sourceBankUrl: bankUrl, targetUrl: extracted.url, label: extracted.label, position: extractedQueue.length + 1, status: 'PENDING', attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
+      extractedQueue.push({ id: crypto.randomUUID(), workspaceId, sourceBankId: bankId, sourceBankUrl: bankUrl, targetUrl: extracted.url, label: extracted.label, position: extractedQueue.length + 1, status: 'PENDING', attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
     }
     const next = await updateWorkspaceState(workspaceId, (state) => {
       if (mode === 'REPLACE' && state.session && ['RUNNING', 'WAITING', 'PAUSED'].includes(state.session.status)) throw new Error('QUEUE_REPLACE_WHILE_ACTIVE');
@@ -316,12 +316,12 @@ async function extractBank(bankUrl: string, workspaceId: string, mode: 'REPLACE'
         ? [...state.queue, ...extractedQueue.filter((item) => !existingUrls.has(item.targetUrl))].map((item, index) => ({ ...item, position: index + 1 }))
         : extractedQueue;
       const now = Date.now();
-      const oldBank = state.banks.find((candidate) => candidate.url === bankUrl);
-      const bank = { id: oldBank?.id ?? crypto.randomUUID(), workspaceId, name: new URL(bankUrl).hostname, url: bankUrl, createdAt: oldBank?.createdAt ?? now, updatedAt: now, lastExtractedAt: now, lastExtractedCount: extractedQueue.length };
-      const banks = [...state.banks.filter((candidate) => candidate.url !== bankUrl), bank];
+      const oldBank = state.banks.find((candidate) => candidate.id === bankId) ?? state.banks.find((candidate) => candidate.url === bankUrl);
+      const bank = { id: oldBank?.id ?? bankId ?? crypto.randomUUID(), workspaceId, name: oldBank?.name ?? new URL(bankUrl).hostname, description: oldBank?.description, url: bankUrl, favorite: oldBank?.favorite ?? false, archived: oldBank?.archived ?? false, createdAt: oldBank?.createdAt ?? now, updatedAt: now, lastExtractedAt: now, lastExtractedCount: extractedQueue.length };
+      const banks = [...state.banks.filter((candidate) => candidate.id !== bank.id && candidate.url !== bankUrl), bank];
       const session = mode === 'APPEND' && state.session
         ? { ...state.session, total: queue.length, updatedAt: now }
-        : { ...(state.session ?? {}), workspaceId, id: crypto.randomUUID(), bankUrl, status: 'IDLE' as const, currentIndex: 0, total: queue.length, intervalMinutes: defaultSettings.intervalMinutes, maxRetries: defaultSettings.maxRetries, failureBehavior: defaultSettings.failureBehavior, confirmBeforeStart: defaultSettings.confirmBeforeStart, keepAutomationTabOpen: defaultSettings.keepAutomationTabOpen, closeTabOnComplete: defaultSettings.closeTabOnComplete, version: 1, updatedAt: now };
+        : { ...(state.session ?? {}), workspaceId, bankId: bank.id, id: crypto.randomUUID(), bankUrl, status: 'IDLE' as const, currentIndex: 0, total: queue.length, intervalMinutes: defaultSettings.intervalMinutes, maxRetries: defaultSettings.maxRetries, failureBehavior: defaultSettings.failureBehavior, confirmBeforeStart: defaultSettings.confirmBeforeStart, keepAutomationTabOpen: defaultSettings.keepAutomationTabOpen, closeTabOnComplete: defaultSettings.closeTabOnComplete, version: 1, updatedAt: now };
       return { ...state, queue, banks, session };
     });
     const nextState: AppState = { workspaceId: next.workspaceId, queue: next.queue, session: next.session, history: next.history };
@@ -338,6 +338,30 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     case 'GET_STATE': return getActiveState();
     case 'GET_WORKSPACES': return { workspaces: await listWorkspaces(true), meta: await getMeta() };
     case 'GET_WORKSPACE_STATE': return getWorkspaceState(message.workspaceId ?? (await getMeta()).activeWorkspaceId);
+    case 'GET_BANKS': {
+      const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
+      return { workspaceId, banks: await listBanks(workspaceId, true) };
+    }
+    case 'CREATE_BANK': {
+      const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
+      return createBank(workspaceId, message.name, message.url, message.description);
+    }
+    case 'UPDATE_BANK': {
+      const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
+      return updateBank(workspaceId, message.bankId, message.patch);
+    }
+    case 'ARCHIVE_BANK': {
+      const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
+      await archiveBank(workspaceId, message.bankId); return getWorkspaceState(workspaceId);
+    }
+    case 'RESTORE_BANK': {
+      const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
+      await restoreBank(workspaceId, message.bankId); return getWorkspaceState(workspaceId);
+    }
+    case 'DELETE_BANK': {
+      const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
+      await deleteBank(workspaceId, message.bankId, message.confirmed); return getWorkspaceState(workspaceId);
+    }
     case 'GET_SESSION_HISTORY': {
       const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
       return { workspaceId, sessions: await getHistoricalSessions(workspaceId) };
@@ -353,7 +377,9 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       const meta = await getMeta();
       const workspaceId = message.workspaceId ?? meta.activeWorkspaceId;
       if (meta.automationWorkspaceId && meta.automationWorkspaceId !== workspaceId) throw new Error('AUTOMATION_OWNED_BY_OTHER_WORKSPACE');
-      return extractBank(message.bankUrl, workspaceId, message.mode ?? 'REPLACE');
+      const bank = message.bankId ? (await getWorkspaceState(workspaceId)).banks.find((candidate) => candidate.id === message.bankId) : undefined;
+      if (message.bankId && (!bank || bank.archived)) throw new Error('BANK_NOT_FOUND_OR_ARCHIVED');
+      return extractBank(bank?.url ?? message.bankUrl, workspaceId, message.mode ?? 'REPLACE', message.bankId);
     }
     case 'UPDATE_SETTINGS': await saveSettings(message.settings); return updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, ...message.settings, updatedAt: Date.now() } : state.session }));
     case 'START': {
