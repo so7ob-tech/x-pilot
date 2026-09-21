@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.19.0] - Unreleased
+
+### Added
+
+- Premium RTL Side Panel shell with grouped Control, Content, Activity, Insights, and Manage navigation.
+- Token-based visual system for graphite, electric blue, cyan, semantic status colors, spacing, radii, shadows, typography, focus, and motion.
+- Local SVG icon system and reusable UI primitives for status badges, metrics, progress, cards, and empty states.
+- Redesigned Operation Dashboard with Workspace context, publish progress, remaining/failed/skipped metrics, and clearer action hierarchy.
+- Responsive layouts for narrow Side Panel widths and reduced-motion support.
+
+### Preserved
+
+- Existing RuntimeMessage contracts, automation behavior, Dry Run no-post boundary, Diagnostics read-only boundary, scheduling, Queue, Banks, Sessions, History, Analytics, and Settings behavior.
+
 ## [0.18.2] - Patch
 
 ### Added
