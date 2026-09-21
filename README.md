@@ -31,6 +31,7 @@
 - تبويب مستقل باسم اختبارات البدء يحتوي على PREFLIGHT CHECK وDRY RUN · NO POST.
 - Advanced Search & Filters داخل Queue وTweet Banks وSessions وHistory حسب النص والحالة والبنك والجلسة والتاريخ وWorkspace.
 - Bulk Queue Actions لتحديد عدة عناصر وتنفيذ Delete وSkip وRetry وReset to Pending والتحريك والتعيين والتصدير، مع حماية العنصر الجاري.
+- Analytics Dashboard لعرض مؤشرات كل Workspace ومؤشرات X-Pilot العامة مشتقة مباشرة من Sessions وHistory دون تخزين مكرر.
 
 ## التطوير
 

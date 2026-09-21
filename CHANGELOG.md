@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.16.0] - Unreleased
+
+### Added
+
+- Analytics Dashboard with Workspace KPIs and global X-Pilot metrics.
+- Derived Total sessions, Total posts, Published, Failed, Skipped, Success Rate, Average attempts, Average session duration, Most active bank, Last activity, and Sessions over time.
+- Analytics are calculated from existing Sessions, History, Queue, and Workspace records without duplicated stored statistics.
+
 ## [0.15.0] - Unreleased
 
 ### Added
