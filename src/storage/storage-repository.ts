@@ -1,4 +1,4 @@
-import type { AppMetaState, AppState, AutomationSession, HistoricalSession, PublishAttempt, QueueItem, Settings, TweetBank, Workspace, WorkspaceState } from '../domain/models';
+import type { AppMetaState, AppState, AutomationSession, BackupEnvelope, BackupSummary, BackupValidation, HistoricalSession, PublishAttempt, QueueItem, Settings, TweetBank, Workspace, WorkspaceState } from '../domain/models';
 
 const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false, duplicatePolicy: 'BLOCK' };
 
@@ -239,3 +239,66 @@ export async function getSettings(): Promise<Settings> { return { ...defaultSett
 export async function saveSettings(settings: Settings): Promise<void> { const meta = await getMeta(); await saveMeta({ ...meta, globalSettings: settings }); }
 export async function saveSession(session: AutomationSession | null): Promise<void> { await updateState((state) => ({ ...state, session })); }
 export async function saveQueue(queue: QueueItem[]): Promise<void> { await updateState((state) => ({ ...state, queue })); }
+
+const BACKUP_APP_VERSION = '0.12.0';
+
+function backupSummary(backup: BackupEnvelope): BackupSummary {
+  return {
+    workspaceCount: backup.workspaces.length,
+    bankCount: backup.workspaces.reduce((count, state) => count + state.banks.length, 0),
+    queueCount: backup.workspaces.reduce((count, state) => count + state.queue.length, 0),
+    historyCount: backup.workspaces.reduce((count, state) => count + state.history.length, 0),
+    historicalSessionCount: backup.workspaces.reduce((count, state) => count + (state.historicalSessions?.length ?? 0), 0),
+    createdAt: backup.createdAt,
+  };
+}
+
+export async function exportBackup(): Promise<BackupEnvelope> {
+  const meta = await getMeta();
+  const workspaces = await Promise.all(meta.workspaceOrder.map((id) => getWorkspaceState(id)));
+  return {
+    format: 'x-pilot-backup', formatVersion: 1, appVersion: BACKUP_APP_VERSION, createdAt: Date.now(),
+    meta: { ...meta, automationWorkspaceId: undefined },
+    workspaces: workspaces.map((state) => ({
+      ...state,
+      session: state.session ? { ...state.session, automationTabId: undefined, operationId: undefined } : null,
+    })),
+  };
+}
+
+export function validateBackup(input: unknown): BackupValidation {
+  const errors: string[] = [];
+  const backup = input as Partial<BackupEnvelope> | null;
+  if (!backup || backup.format !== 'x-pilot-backup') errors.push('INVALID_BACKUP_FORMAT');
+  if (backup?.formatVersion !== 1) errors.push('UNSUPPORTED_BACKUP_VERSION');
+  if (!backup?.meta || backup.meta.schemaVersion !== 3 || !Array.isArray(backup.meta.workspaceOrder)) errors.push('INVALID_BACKUP_META');
+  if (!Array.isArray(backup?.workspaces) || backup.workspaces.length === 0) errors.push('BACKUP_HAS_NO_WORKSPACES');
+  const workspaces = Array.isArray(backup?.workspaces) ? backup.workspaces as WorkspaceState[] : [];
+  const ids = new Set(workspaces.map((state) => state?.workspaceId));
+  if (ids.size !== workspaces.length || workspaces.some((state) => !state?.workspace?.id || state.workspace.id !== state.workspaceId)) errors.push('INVALID_WORKSPACE_RECORD');
+  if (backup?.meta && (!ids.has(backup.meta.activeWorkspaceId) || backup.meta.workspaceOrder.some((id) => !ids.has(id)))) errors.push('WORKSPACE_ORDER_MISMATCH');
+  for (const state of workspaces) {
+    const bankIds = new Set((state.banks ?? []).map((bank) => bank.id));
+    if ((state.banks ?? []).some((bank) => bank.workspaceId !== state.workspaceId)) errors.push(`BANK_WORKSPACE_MISMATCH:${state.workspaceId}`);
+    if ((state.queue ?? []).some((item) => item.workspaceId !== state.workspaceId || (item.sourceBankId && !bankIds.has(item.sourceBankId)))) errors.push(`QUEUE_REFERENCE_MISMATCH:${state.workspaceId}`);
+    if (state.session && state.session.workspaceId !== state.workspaceId) errors.push(`SESSION_WORKSPACE_MISMATCH:${state.workspaceId}`);
+  }
+  if (errors.length) return { valid: false, errors: [...new Set(errors)] };
+  return { valid: true, summary: backupSummary(backup as BackupEnvelope), errors: [] };
+}
+
+export async function restoreBackup(input: unknown, confirmed: boolean): Promise<BackupSummary> {
+  if (!confirmed) throw new Error('BACKUP_RESTORE_CONFIRMATION_REQUIRED');
+  const validation = validateBackup(input);
+  if (!validation.valid || !validation.summary) throw new Error(`INVALID_BACKUP:${validation.errors.join(',')}`);
+  const backup = input as BackupEnvelope;
+  const currentMeta = await getMeta();
+  const currentKeys = currentMeta.workspaceOrder.map(workspaceKey);
+  const nextStates = backup.workspaces.map((state) => ({ ...state, session: state.session ? { ...state.session, automationTabId: undefined, operationId: undefined } : null }));
+  await chrome.storage.local.remove(currentKeys);
+  await chrome.storage.local.set({
+    ...Object.fromEntries(nextStates.map((state) => [workspaceKey(state.workspaceId), state])),
+    [META_KEY]: { ...backup.meta, automationWorkspaceId: undefined },
+  });
+  return validation.summary;
+}

@@ -90,6 +90,19 @@ test('Dry Run exposes both modes and does not use the publish action', () => {
   assert.doesNotMatch(runner, /addAttempt/);
 });
 
+test('Full Backup / Restore validates before replacing local data', () => {
+  assert.match(models, /interface BackupEnvelope/);
+  assert.match(models, /EXPORT_BACKUP/);
+  assert.match(models, /VALIDATE_BACKUP/);
+  assert.match(models, /RESTORE_BACKUP/);
+  assert.match(storage, /export async function exportBackup/);
+  assert.match(storage, /export function validateBackup/);
+  assert.match(storage, /export async function restoreBackup/);
+  assert.match(serviceWorker, /BACKUP_RESTORE_WHILE_AUTOMATION_ACTIVE/);
+  assert.match(uiSource, /تصدير نسخة كاملة/);
+  assert.match(uiSource, /استعادة نسخة JSON/);
+});
+
 test('tab bar renders accessible live connection and engine indicators', () => {
   assert.match(uiSource, /GET_RUNTIME_STATUS/);
   assert.match(uiSource, /window\.setInterval\(\(\) => void refreshRuntimeStatus\(\), 1500\)/);
