@@ -14,6 +14,9 @@ h2 { margin: 0 0 14px; font-size: 17px; }
 .card { background: white; border: 1px solid #dce4ef; border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: 0 6px 20px #193a5b0b; }
 input { width: 100%; border: 1px solid #cbd6e3; border-radius: 10px; padding: 10px 12px; font: inherit; background: #fff; }
 .row input { flex: 1; }
+.extract-options { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+.extract-options label { display: inline-flex; align-items: center; gap: 5px; margin-top: 0; color: #53667e; font-size: 11px; font-weight: 700; }
+.extract-options input { width: auto; margin: 0; }
 label { display: block; font-size: 13px; font-weight: 700; margin-top: 12px; }
 label input { margin-top: 6px; }
 .check { display: flex; gap: 8px; align-items: center; }
