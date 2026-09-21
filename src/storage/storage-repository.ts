@@ -1,6 +1,6 @@
 import type { AppMetaState, AppState, AutomationSession, HistoricalSession, PublishAttempt, QueueItem, Settings, TweetBank, Workspace, WorkspaceState } from '../domain/models';
 
-const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false };
+const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false, duplicatePolicy: 'BLOCK' };
 
 export const LEGACY_STATE_KEY = 'xQueueState';
 export const LEGACY_SETTINGS_KEY = 'xQueueSettings';
@@ -235,7 +235,7 @@ export async function saveHistoricalSession(workspaceId: string, session: Histor
 export async function updateHistoricalSession(workspaceId: string, sessionId: string, patch: Partial<HistoricalSession>): Promise<void> {
   await updateWorkspaceState(workspaceId, (state) => ({ ...state, historicalSessions: (state.historicalSessions ?? []).map((session) => session.id === sessionId ? { ...session, ...patch, updatedAt: Date.now() } : session) }));
 }
-export async function getSettings(): Promise<Settings> { return (await getMeta()).globalSettings; }
+export async function getSettings(): Promise<Settings> { return { ...defaultSettings, ...(await getMeta()).globalSettings }; }
 export async function saveSettings(settings: Settings): Promise<void> { const meta = await getMeta(); await saveMeta({ ...meta, globalSettings: settings }); }
 export async function saveSession(session: AutomationSession | null): Promise<void> { await updateState((state) => ({ ...state, session })); }
 export async function saveQueue(queue: QueueItem[]): Promise<void> { await updateState((state) => ({ ...state, queue })); }

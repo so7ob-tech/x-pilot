@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.0] - Unreleased
+
+### Added
+
+- SHA-256 Content Fingerprint generation from supported tweet intent URLs.
+- Normalized-content duplicate detection across Tweet Banks and Workspaces.
+- Duplicate policies: Block, Warn, and Allow.
+- Refresh & Diff warnings for queued duplicates and previously published content.
+- Published duplicates are excluded from the default selection and blocked by the default policy.
+
 ## [0.8.0] - Unreleased
 
 ### Added

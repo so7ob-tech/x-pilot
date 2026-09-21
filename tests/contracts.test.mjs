@@ -234,9 +234,20 @@ test('Refresh Diff is non-destructive and supports selective Queue merge', () =>
   assert.match(models, /ADD_DIFF_ITEMS/);
   assert.match(models, /DISCARD_BANK_DIFF/);
   assert.match(serviceWorker, /async function refreshBank\(workspaceId: string, bankId: string\)/);
-  assert.match(serviceWorker, /classifyBankDiff\(workspaceId, bank, snapshot, state.queue\)/);
-  assert.match(serviceWorker, /mergeSelectedDiffItems\(workspaceState.queue, diff, bank, message.itemIds\)/);
+  assert.match(serviceWorker, /classifyBankDiff\(workspaceId, bank, snapshot, state.queue,/);
+  assert.match(serviceWorker, /mergeSelectedDiffItems\(workspaceState.queue, diff, bank, message.itemIds,/);
   assert.match(uiSource, /Refresh & Diff/);
   assert.match(uiSource, /إضافة المحدد إلى Queue/);
   assert.match(uiSource, /مراجعة تغييرات البنك/);
+});
+
+test('Duplicate Protection exposes SHA-256 fingerprints and policy controls', () => {
+  assert.match(models, /contentFingerprint/);
+  assert.match(models, /DuplicatePolicy/);
+  assert.match(models, /duplicatePolicy: DuplicatePolicy/);
+  assert.match(serviceWorker, /fingerprintTweet/);
+  assert.match(serviceWorker, /fingerprintIndex/);
+  assert.match(uiSource, /سياسة التكرار/);
+  assert.match(uiSource, /سبق نشر هذا المحتوى/);
+  assert.match(uiSource, /محتوى مكرر/);
 });

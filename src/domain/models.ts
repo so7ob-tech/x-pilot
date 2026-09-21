@@ -1,12 +1,13 @@
 export type QueueItemStatus = 'PENDING' | 'OPENING' | 'READY' | 'PUBLISHING' | 'PUBLISHED' | 'PUBLISHED_UNVERIFIED' | 'FAILED' | 'SKIPPED';
 export type SessionStatus = 'IDLE' | 'RUNNING' | 'PAUSED' | 'STOPPED' | 'WAITING' | 'COMPLETED' | 'FAILED';
 export type FailureBehavior = 'CONTINUE' | 'PAUSE';
+export type DuplicatePolicy = 'BLOCK' | 'WARN' | 'ALLOW';
 export type HistoricalSessionStatus = 'RUNNING' | 'PAUSED' | 'WAITING' | 'COMPLETED' | 'STOPPED' | 'FAILED';
 
 export interface QueueItem {
   id: string; workspaceId?: string; sourceBankId?: string; sourceBankUrl: string; targetUrl: string; label?: string; position: number;
   status: QueueItemStatus; attempts: number; createdAt: number; updatedAt: number; startedAt?: number;
-  publishedAt?: number; lastError?: string; operationId?: string;
+  publishedAt?: number; lastError?: string; operationId?: string; contentFingerprint?: string; normalizedContent?: string; duplicateStatus?: 'UNIQUE' | 'DUPLICATE' | 'PUBLISHED_DUPLICATE'; duplicateOfItemId?: string;
 }
 export interface AutomationSession {
   id: string; workspaceId?: string; bankId?: string; bankUrl: string; status: SessionStatus; currentItemId?: string; currentIndex: number; total: number;
@@ -26,14 +27,14 @@ export interface HistoricalSession {
 export interface AppState { workspaceId?: string; queue: QueueItem[]; session: AutomationSession | null; history: PublishAttempt[]; }
 export interface Workspace { id: string; name: string; description: string; color?: string; icon?: string; favorite: boolean; archived: boolean; createdAt: number; updatedAt: number; lastActivityAt: number; }
 export interface TweetBank { id: string; workspaceId: string; name: string; description?: string; url: string; favorite: boolean; archived: boolean; createdAt: number; updatedAt: number; lastExtractedAt?: number; lastExtractedCount?: number; lastSnapshot?: BankSnapshotItem[]; lastSnapshotAt?: number; }
-export interface BankSnapshotItem { url: string; label?: string; }
+export interface BankSnapshotItem { url: string; label?: string; contentFingerprint?: string; normalizedContent?: string; }
 export type BankDiffCategory = 'NEW' | 'EXISTING' | 'PREVIOUSLY_PUBLISHED' | 'REMOVED' | 'INVALID';
-export interface BankDiffItem extends BankSnapshotItem { id: string; category: BankDiffCategory; existingQueueItemId?: string; reason?: string; }
+export interface BankDiffItem extends BankSnapshotItem { id: string; category: BankDiffCategory; existingQueueItemId?: string; duplicateStatus?: 'UNIQUE' | 'DUPLICATE' | 'PUBLISHED_DUPLICATE'; duplicateOfWorkspaceId?: string; reason?: string; }
 export interface BankDiffResult { workspaceId: string; bankId: string; refreshedAt: number; items: BankDiffItem[]; selectedNewIds: string[]; }
 export interface WorkspaceState extends AppState { workspaceId: string; workspace: Workspace; banks: TweetBank[]; historicalSessions: HistoricalSession[]; }
-export interface Settings { intervalMinutes: number; maxRetries: number; failureBehavior: FailureBehavior; confirmBeforeStart: boolean; keepAutomationTabOpen: boolean; closeTabOnComplete: boolean; }
+export interface Settings { intervalMinutes: number; maxRetries: number; failureBehavior: FailureBehavior; confirmBeforeStart: boolean; keepAutomationTabOpen: boolean; closeTabOnComplete: boolean; duplicatePolicy: DuplicatePolicy; }
 export interface AppMetaState { schemaVersion: 2 | 3; activeWorkspaceId: string; automationWorkspaceId?: string; workspaceOrder: string[]; globalSettings: Settings; }
-export const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false };
+export const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false, duplicatePolicy: 'BLOCK' };
 export type AutomationConnection = 'CONNECTED' | 'DISCONNECTED' | 'NOT_REQUIRED';
 export interface RuntimeStatus { engineStatus: SessionStatus; connection: AutomationConnection; automationTabId?: number; automationWorkspaceId?: string; checkedAt: number; }
 export type RuntimeMessage =
