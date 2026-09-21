@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AppMetaState, AppState, BankDiffItem, BankDiffResult, BackupEnvelope, DryRunResult, HistoricalSession, PreflightResult, PublishAttempt, QueueItem, RuntimeMessage, RuntimeStatus, Settings, TweetBank, Workspace, WorkspaceState } from '../domain/models';
+import type { AppMetaState, AppState, BankDiffItem, BankDiffResult, BackupEnvelope, DiagnosticsResult, DryRunResult, HistoricalSession, PreflightResult, PublishAttempt, QueueItem, RuntimeMessage, RuntimeStatus, Settings, TweetBank, Workspace, WorkspaceState } from '../domain/models';
 import { defaultSettings } from '../domain/models';
 import { getTweetPreview } from '../extraction/tweet-preview';
 import { emptySearchFilters, filterBanks, filterHistory, filterQueue, filterSessions, type SearchFilters, workspaceStatesToSearchData } from '../domain/search-filters';
@@ -9,7 +9,7 @@ import './styles.css';
 
 const initialState: AppState = { queue: [], session: null, history: [] };
 const initialRuntimeStatus: RuntimeStatus = { engineStatus: 'IDLE', connection: 'NOT_REQUIRED', checkedAt: 0 };
-type TabId = 'operation' | 'tests' | 'queue' | 'sessions' | 'history' | 'analytics' | 'workspaces' | 'settings';
+type TabId = 'operation' | 'tests' | 'queue' | 'sessions' | 'history' | 'analytics' | 'diagnostics' | 'workspaces' | 'settings';
 
 function send(message: RuntimeMessage): Promise<any> { return chrome.runtime.sendMessage(message); }
 
@@ -38,6 +38,7 @@ function App() {
   const [historyFilters, setHistoryFilters] = useState<SearchFilters>(emptySearchFilters);
   const [selectedQueueIds, setSelectedQueueIds] = useState<string[]>([]);
   const [analyticsWorkspaceId, setAnalyticsWorkspaceId] = useState('*');
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null);
   const [scheduleAt, setScheduleAt] = useState('');
   const [windowsText, setWindowsText] = useState('[]');
   const session = state.session;
@@ -87,6 +88,7 @@ function App() {
   const schedule = async (reschedule = false) => { const startAt = new Date(scheduleAt).getTime(); if (!Number.isFinite(startAt)) return setNotice('حدد تاريخ ووقت صحيحين للجدولة'); await act({ type: reschedule ? 'RESCHEDULE' : 'SCHEDULE', startAt, workspaceId: meta?.activeWorkspaceId }, reschedule ? 'تمت إعادة جدولة الجلسة' : 'تمت جدولة الجلسة'); };
   const runPreflightCheck = async () => { const result = await send({ type: 'PREFLIGHT_CHECK', workspaceId: meta?.activeWorkspaceId }); if (result?.error) return setNotice(result.error); setPreflight(result); setNotice(result.summary); };
   const runDryRun = async (mode: 'DRY_RUN_FIRST' | 'DRY_RUN_QUEUE') => { setNotice('بدأ فحص Dry Run — لن يتم الضغط على Post'); const result = await send({ type: mode, workspaceId: meta?.activeWorkspaceId }); if (result?.error) return setNotice(result.error); setDryRun(result); setNotice(result.status === 'COMPLETED' ? 'اكتمل فحص Dry Run' : `حالة Dry Run: ${result.status}`); };
+  const runDiagnostics = async () => { setNotice('بدأ Diagnostics — فحص قراءة فقط دون نشر'); const result = await send({ type: 'RUN_DIAGNOSTICS' }); if (result?.error) return setNotice(result.error); setDiagnostics(result); setNotice('اكتمل Diagnostics — لم يتم نشر أي شيء'); };
   const updateSettings = async (next: Settings) => { setSettings(next); await act({ type: 'UPDATE_SETTINGS', settings: next }); };
   const saveWorkspaceProfile = async () => { const result = await send({ type: 'UPDATE_WORKSPACE_PROFILE', workspaceId: meta?.activeWorkspaceId ?? '', profile: settings }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); setNotice('تم حفظ إعدادات Workspace الحالية كـ Override'); };
   const clearWorkspaceProfile = async () => { const result = await send({ type: 'CLEAR_WORKSPACE_PROFILE', workspaceId: meta?.activeWorkspaceId ?? '' }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); setNotice('عادت Workspace إلى Global Defaults'); };
@@ -146,6 +148,7 @@ function App() {
       <TabButton id="sessions" activeTab={activeTab} onSelect={setActiveTab} icon="◷" label="الجلسات" />
       <TabButton id="history" activeTab={activeTab} onSelect={setActiveTab} icon="◷" label="السجل" />
       <TabButton id="analytics" activeTab={activeTab} onSelect={setActiveTab} icon="▥" label="التحليلات" />
+      <TabButton id="diagnostics" activeTab={activeTab} onSelect={setActiveTab} icon="⚕" label="التشخيص" />
       <TabButton id="workspaces" activeTab={activeTab} onSelect={setActiveTab} icon="▦" label="مساحات العمل" />
       <TabButton id="settings" activeTab={activeTab} onSelect={setActiveTab} icon="⚙" label="الإعدادات" />
     </div><div className="runtime-indicators" aria-live="polite"><StatusIndicator kind="connection" value={runtimeStatus.connection} label={connectionLabel(runtimeStatus.connection)} /><StatusIndicator kind="engine" value={runtimeStatus.engineStatus} label={engineLabel(runtimeStatus.engineStatus)} /></div></nav>
@@ -184,6 +187,8 @@ function App() {
 
     {activeTab === 'analytics' && <AnalyticsDashboard global={globalAnalytics} workspace={workspaceAnalytics} workspaceRows={allWorkspaceAnalytics} workspaces={workspaces} selectedWorkspaceId={analyticsWorkspaceId} onWorkspaceChange={setAnalyticsWorkspaceId} />}
 
+    {activeTab === 'diagnostics' && <DiagnosticsCenter result={diagnostics} onRun={() => void runDiagnostics()} />}
+
     {activeTab === 'workspaces' && <section className="tab-panel" role="tabpanel" aria-label="مساحات العمل">
       <section className="card"><div className="section-heading"><div><span className="eyebrow">PROJECTS</span><h2>كل مساحات العمل</h2></div><button className="primary" onClick={() => void createNewWorkspace()}>+ Workspace جديدة</button></div><p className="muted">المساحة النشطة: {activeWorkspace?.name ?? 'غير محددة'}{meta?.automationWorkspaceId ? ` · قيد التشغيل: ${workspaces.find((workspace) => workspace.id === meta.automationWorkspaceId)?.name ?? 'Workspace أخرى'}` : ''}</p></section>
       <div className="workspace-list">{workspaces.map((workspace) => <WorkspaceCard key={workspace.id} workspace={workspace} active={workspace.id === meta?.activeWorkspaceId} running={workspace.id === meta?.automationWorkspaceId} onOpen={() => void switchWorkspace(workspace.id)} onArchive={() => void archive(workspace.id)} onRestore={() => void restore(workspace.id)} onDelete={() => void remove(workspace)} />)}</div>
@@ -215,6 +220,8 @@ function AnalyticsDashboard({ global, workspace, workspaceRows, workspaces, sele
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) { return <div className="analytics-metric"><span>{label}</span><strong>{value}</strong></div>; }
+
+function DiagnosticsCenter({ result, onRun }: { result: DiagnosticsResult | null; onRun: () => void }) { return <section className="tab-panel diagnostics-panel" role="tabpanel" aria-label="التشخيص"><section className="card"><div className="section-heading"><div><span className="eyebrow">DIAGNOSTICS CENTER</span><h2>مركز التشخيص</h2></div><button className="primary" onClick={onRun}>Run Diagnostics</button></div><p className="muted">يفحص الحالة فقط باستخدام X_INSPECT. لا يضغط Post، ولا يبدأ جلسة، ولا يغير Queue أو History أو المحاولات.</p></section>{result ? <><section className="card diagnostics-meta"><div><strong>Extension version</strong><span>{result.extensionVersion}</span></div><div><strong>Storage schema</strong><span>{result.schemaVersion}</span></div><div><strong>Active Workspace</strong><span>{result.activeWorkspaceId ?? '—'}</span></div><div><strong>Automation Workspace</strong><span>{result.automationWorkspaceId ?? '—'}</span></div><div><strong>Running Session</strong><span>{result.runningSession ? `${result.runningSession.status} · ${result.runningSession.id.slice(0, 8)}` : '—'}</span></div><div><strong>Alarm</strong><span>{result.alarm?.name ?? '—'}</span></div><div><strong>Automation Tab</strong><span>{result.automationTabId ?? '—'}</span></div></section><div className="diagnostics-checks">{result.checks.map((check) => <article className={`diagnostics-check diagnostics-${check.status}`} key={check.id}><span className="diagnostics-check-icon">{check.status === 'OK' ? '✓' : check.status === 'FAIL' ? '×' : check.status === 'WARN' ? '!' : '?'}</span><div><strong>{check.message}</strong>{check.details && <small>{check.details}</small>}</div></article>)}</div><p className="diagnostics-safe">✓ Read-only diagnostics completed — no post action was executed · {new Date(result.checkedAt).toLocaleString('ar')}</p></> : <section className="card"><p className="muted">اضغط Run Diagnostics لفحص Storage وAlarm وX Session وComposer وPost Button والصلاحيات.</p></section>}</section>; }
 
 function StatusIndicator({ kind, value, label }: { kind: 'connection' | 'engine'; value: string; label: string }) { return <span className={`live-indicator ${kind}-indicator ${kind}-${value}`}><span className="live-dot" aria-hidden="true" />{label}</span>; }
 function connectionLabel(value: RuntimeStatus['connection']): string { return value === 'CONNECTED' ? 'متصل' : value === 'DISCONNECTED' ? 'غير متصل' : 'غير مطلوب'; }

@@ -59,7 +59,7 @@ button.danger { color: #a42020; }
 .workspace-switcher select { flex: 1; min-width: 0; border: 1px solid #cbd6e3; border-radius: 9px; padding: 9px 10px; background: #fff; font: inherit; }
 .workspace-switcher .eyebrow { align-self: center; }
 .workspace-switcher button { padding: 8px 9px; font-size: 11px; }
-.tabs { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; padding: 5px; background: #e8eef7; border-radius: 13px; }
+.tabs { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; padding: 5px; background: #e8eef7; border-radius: 13px; }
 .tab-button { border: 0; background: transparent; color: #5f7087; padding: 10px 8px; font-size: 12px; font-weight: 800; }
 .tab-button span { margin-left: 5px; }
 .tab-button.active { color: #145dcc; background: #fff; box-shadow: 0 2px 9px #193a5b18; }
@@ -96,6 +96,24 @@ button.danger { color: #a42020; }
 .sessions-bar { display: flex; align-items: center; flex-direction: column; justify-content: end; gap: 5px; min-width: 30px; height: 130px; }
 .sessions-bar span { width: 22px; min-height: 8px; border-radius: 6px 6px 0 0; background: linear-gradient(#3b82f6, #79aef5); }
 .sessions-bar small { color: #6b7b91; font-size: 9px; direction: ltr; }
+.diagnostics-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.diagnostics-meta div { display: grid; gap: 4px; padding: 9px; border-radius: 10px; background: #f8fbff; min-width: 0; }
+.diagnostics-meta strong { font-size: 11px; }
+.diagnostics-meta span { color: #53667e; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diagnostics-checks { display: grid; gap: 7px; }
+.diagnostics-check { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid #dce4ef; border-radius: 11px; background: #fff; }
+.diagnostics-check-icon { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-weight: 800; }
+.diagnostics-check div { display: grid; gap: 2px; }
+.diagnostics-check small { color: #6b7b91; font-size: 10px; direction: ltr; }
+.diagnostics-OK { border-color: #b9dfc7; background: #f4fcf6; }
+.diagnostics-OK .diagnostics-check-icon { color: #137333; background: #d8f3df; }
+.diagnostics-WARN { border-color: #f0d18a; background: #fffaf0; }
+.diagnostics-WARN .diagnostics-check-icon { color: #8a5a00; background: #ffedb8; }
+.diagnostics-FAIL { border-color: #efb7b2; background: #fff6f5; }
+.diagnostics-FAIL .diagnostics-check-icon { color: #b42318; background: #fbd8d5; }
+.diagnostics-NOT_CHECKED { border-color: #cbd6e3; background: #f8fafc; }
+.diagnostics-NOT_CHECKED .diagnostics-check-icon { color: #53667e; background: #e5ebf2; }
+.diagnostics-safe { margin: 10px 0; color: #137333; font-size: 11px; text-align: center; }
 .session-progress { color: #6b7b91; font-size: 11px; white-space: nowrap; }
 .stats { margin-bottom: 0; }
 .stats div { flex: 1; background: #fff; border: 1px solid #dce4ef; border-radius: 14px; padding: 12px 8px; text-align: center; }
