@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.13.3] - Patch
+
+### Changed
+
+- Moved PREFLIGHT CHECK and DRY RUN · NO POST into an independent RTL tab named اختبارات البدء.
+
 ## [0.13.2] - Patch
 
 ### Fixed
