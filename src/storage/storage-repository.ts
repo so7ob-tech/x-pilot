@@ -21,6 +21,11 @@ export const V4_QUEUE_PREFIX = 'xPilot:queue:';
 export const V4_SESSIONS_PREFIX = 'xPilot:sessions:';
 export const V4_ATTEMPTS_PREFIX = 'xPilot:attempts:';
 export const V4_SNAPSHOT_PREFIX = 'xPilot:bank-snapshot:';
+export const START_LOCK_KEY = 'xPilot:lock:start';
+export const RESTORE_STAGING_PREFIX = 'xPilot:restore:staging:';
+
+interface PersistedStartLock { token: string; workspaceId: string; acquiredAt: number; expiresAt: number; }
+let startLockTail: Promise<void> = Promise.resolve();
 
 const emptyState = (workspaceId?: string): AppState => ({ workspaceId, queue: [], session: null, history: [] });
 const workspaceKey = (workspaceId: string) => `${WORKSPACE_KEY_PREFIX}${workspaceId}`;
@@ -33,12 +38,12 @@ const v4AttemptsKey = (workspaceId: string) => `${V4_ATTEMPTS_PREFIX}${workspace
 
 function runtimeFromSession(session: AutomationSession | null, workspaceId: string): AutomationSessionRuntime | null {
   if (!session) return null;
-  return { workspaceId, sessionId: session.id, bankId: session.bankId, bankUrl: session.bankUrl, status: session.status, currentItemId: session.currentItemId, currentIndex: session.currentIndex, total: session.total, startedAt: session.startedAt, scheduledStartAt: session.scheduledStartAt, pausedAt: session.pausedAt, completedAt: session.completedAt, nextRunAt: session.nextRunAt, automationTabId: session.automationTabId, operationId: undefined, updatedAt: session.updatedAt, version: session.version };
+  return { workspaceId, sessionId: session.id, bankId: session.bankId, bankUrl: session.bankUrl, status: session.status, currentItemId: session.currentItemId, currentIndex: session.currentIndex, total: session.total, startedAt: session.startedAt, scheduledStartAt: session.scheduledStartAt, pausedAt: session.pausedAt, completedAt: session.completedAt, nextRunAt: session.nextRunAt, automationTabId: session.automationTabId, operationId: undefined, alarmFailureCount: session.alarmFailureCount, lastAlarmError: session.lastAlarmError, updatedAt: session.updatedAt, version: session.version };
 }
 
 function sessionFromRuntime(runtime: AutomationSessionRuntime | null, settings: Settings): AutomationSession | null {
   if (!runtime) return null;
-  return { id: runtime.sessionId, workspaceId: runtime.workspaceId, bankId: runtime.bankId, bankUrl: runtime.bankUrl ?? '', status: runtime.status, currentItemId: runtime.currentItemId, currentIndex: runtime.currentIndex, total: runtime.total, startedAt: runtime.startedAt, scheduledStartAt: runtime.scheduledStartAt, pausedAt: runtime.pausedAt, completedAt: runtime.completedAt, nextRunAt: runtime.nextRunAt, automationTabId: runtime.automationTabId, intervalMinutes: settings.intervalMinutes, maxRetries: settings.maxRetries, failureBehavior: settings.failureBehavior, confirmBeforeStart: settings.confirmBeforeStart, keepAutomationTabOpen: settings.keepAutomationTabOpen, closeTabOnComplete: settings.closeTabOnComplete, version: runtime.version, updatedAt: runtime.updatedAt, historicalSessionId: runtime.sessionId };
+  return { id: runtime.sessionId, workspaceId: runtime.workspaceId, bankId: runtime.bankId, bankUrl: runtime.bankUrl ?? '', status: runtime.status, currentItemId: runtime.currentItemId, currentIndex: runtime.currentIndex, total: runtime.total, startedAt: runtime.startedAt, scheduledStartAt: runtime.scheduledStartAt, pausedAt: runtime.pausedAt, completedAt: runtime.completedAt, nextRunAt: runtime.nextRunAt, automationTabId: runtime.automationTabId, alarmFailureCount: runtime.alarmFailureCount, lastAlarmError: runtime.lastAlarmError, intervalMinutes: settings.intervalMinutes, maxRetries: settings.maxRetries, failureBehavior: settings.failureBehavior, confirmBeforeStart: settings.confirmBeforeStart, keepAutomationTabOpen: settings.keepAutomationTabOpen, closeTabOnComplete: settings.closeTabOnComplete, version: runtime.version, updatedAt: runtime.updatedAt, historicalSessionId: runtime.sessionId };
 }
 
 function toV4Attempt(attempt: LegacyPublishAttempt, workspaceId: string): PublishAttempt {
@@ -89,6 +94,12 @@ async function readMeta(): Promise<AppMetaState | undefined> {
   const result = await timedStorageOperation('get', 3, () => chrome.storage.local.get([META_KEY, V4_META_KEY, V4_GLOBAL_SETTINGS_KEY]));
   if (result[V4_META_KEY]) return { ...(result[V4_META_KEY] as AppMetadata), globalSettings: result[V4_GLOBAL_SETTINGS_KEY] as Settings } as AppMetaState;
   return result[META_KEY] as AppMetaState | undefined;
+}
+
+export async function cleanupRestoreStaging(): Promise<void> {
+  const all = await chrome.storage.local.get(null);
+  const stagingKeys = Object.keys(all).filter((key) => key.startsWith(RESTORE_STAGING_PREFIX));
+  if (stagingKeys.length) await chrome.storage.local.remove(stagingKeys);
 }
 
 async function migrateIfNeeded(): Promise<AppMetaState> {
@@ -313,6 +324,31 @@ export async function releaseAutomationOwner(workspaceId: string): Promise<void>
   if (meta.automationWorkspaceId === workspaceId) await saveMeta({ ...meta, automationWorkspaceId: undefined });
 }
 
+export async function acquireStartLock(workspaceId: string, now = Date.now(), ttlMs = 15_000): Promise<string> {
+  const previous = startLockTail;
+  let releaseTail!: () => void;
+  startLockTail = new Promise<void>((resolve) => { releaseTail = resolve; });
+  await previous;
+  try {
+    const stored = await chrome.storage.local.get(START_LOCK_KEY);
+    const existing = stored[START_LOCK_KEY] as PersistedStartLock | undefined;
+    if (existing && existing.expiresAt > now) throw new Error('START_ALREADY_IN_FLIGHT');
+    const token = crypto.randomUUID();
+    const lock: PersistedStartLock = { token, workspaceId, acquiredAt: now, expiresAt: now + ttlMs };
+    await chrome.storage.local.set({ [START_LOCK_KEY]: lock });
+    const verified = await chrome.storage.local.get(START_LOCK_KEY);
+    if ((verified[START_LOCK_KEY] as PersistedStartLock | undefined)?.token !== token) throw new Error('START_LOCK_LOST');
+    return token;
+  } finally {
+    releaseTail();
+  }
+}
+
+export async function releaseStartLock(token: string): Promise<void> {
+  const stored = await chrome.storage.local.get(START_LOCK_KEY);
+  if ((stored[START_LOCK_KEY] as PersistedStartLock | undefined)?.token === token) await chrome.storage.local.remove(START_LOCK_KEY);
+}
+
 export async function addAttempt(attempt: PublishAttempt | LegacyPublishAttempt): Promise<void> {
   const meta = await getMeta();
   const workspaceId = attempt.workspaceId ?? meta.automationWorkspaceId ?? meta.activeWorkspaceId;
@@ -411,9 +447,13 @@ export function validateBackup(input: unknown): BackupValidation {
   const workspaces = Array.isArray(backup?.workspaces) ? backup.workspaces as WorkspaceState[] : [];
   const ids = new Set(workspaces.map((state) => state?.workspaceId));
   if (ids.size !== workspaces.length || workspaces.some((state) => !state?.workspace?.id || state.workspace.id !== state.workspaceId)) errors.push('INVALID_WORKSPACE_RECORD');
+  if (workspaces.some((state) => state.workspace?.archived === undefined || !state.workspace?.name)) errors.push('MISSING_WORKSPACE_FIELDS');
   if (backup?.meta && (!ids.has(backup.meta.activeWorkspaceId) || backup.meta.workspaceOrder.some((id) => !ids.has(id)))) errors.push('WORKSPACE_ORDER_MISMATCH');
   for (const state of workspaces) {
     const bankIds = new Set((state.banks ?? []).map((bank) => bank.id));
+    const queueIds = new Set((state.queue ?? []).map((item) => item.id));
+    if (bankIds.size !== (state.banks ?? []).length) errors.push(`DUPLICATE_BANK_ID:${state.workspaceId}`);
+    if (queueIds.size !== (state.queue ?? []).length) errors.push(`DUPLICATE_QUEUE_ID:${state.workspaceId}`);
     if ((state.banks ?? []).some((bank) => bank.workspaceId !== state.workspaceId)) errors.push(`BANK_WORKSPACE_MISMATCH:${state.workspaceId}`);
     if ((state.queue ?? []).some((item) => item.workspaceId !== state.workspaceId || (item.sourceBankId && !bankIds.has(item.sourceBankId)))) errors.push(`QUEUE_REFERENCE_MISMATCH:${state.workspaceId}`);
     if (state.session && state.session.workspaceId !== state.workspaceId) errors.push(`SESSION_WORKSPACE_MISMATCH:${state.workspaceId}`);
@@ -428,9 +468,14 @@ export async function restoreBackup(input: unknown, confirmed: boolean): Promise
   if (!validation.valid || !validation.summary) throw new Error(`INVALID_BACKUP:${validation.errors.join(',')}`);
   const backup = input as BackupEnvelope;
   const currentMeta = await getMeta();
+  const transactionId = crypto.randomUUID();
+  const stagingPrefix = `${RESTORE_STAGING_PREFIX}${transactionId}:`;
+  const cleanup = async () => {
+    const all = await chrome.storage.local.get(null);
+    const stagingKeys = Object.keys(all).filter((key) => key.startsWith(RESTORE_STAGING_PREFIX));
+    if (stagingKeys.length) await chrome.storage.local.remove(stagingKeys);
+  };
   if (backup.formatVersion === 2 || backup.meta.schemaVersion === 4) {
-    const oldKeys = currentMeta.workspaceOrder.flatMap((id) => [v4WorkspaceKey(id), v4WorkspaceSettingsKey(id), v4BankKey(id), v4QueueKey(id), v4SessionsKey(id), v4AttemptsKey(id)]);
-    await chrome.storage.local.remove([...oldKeys, V4_META_KEY, V4_GLOBAL_SETTINGS_KEY, V4_RUNTIME_KEY]);
     const settingsByWorkspace = new Map((backup.workspaceSettings ?? []).map((settings) => [settings.workspaceId, settings]));
     const attemptsByWorkspace = new Map<string, PublishAttempt[]>();
     for (const attempt of backup.attempts ?? []) attemptsByWorkspace.set(attempt.workspaceId ?? '', [...(attemptsByWorkspace.get(attempt.workspaceId ?? '') ?? []), attempt]);
@@ -445,12 +490,45 @@ export async function restoreBackup(input: unknown, confirmed: boolean): Promise
       writes[v4SessionsKey(state.workspaceId)] = sessionsByWorkspace.get(state.workspaceId) ?? state.historicalSessions ?? [];
       writes[v4AttemptsKey(state.workspaceId)] = attemptsByWorkspace.get(state.workspaceId) ?? state.history.map((attempt) => toV4Attempt(attempt, state.workspaceId));
     }
-    await chrome.storage.local.set(writes);
+    const previousKeys = [...currentMeta.workspaceOrder.flatMap((id) => [v4WorkspaceKey(id), v4WorkspaceSettingsKey(id), v4BankKey(id), v4QueueKey(id), v4SessionsKey(id), v4AttemptsKey(id)]), V4_META_KEY, V4_GLOBAL_SETTINGS_KEY, V4_RUNTIME_KEY];
+    const previous = await chrome.storage.local.get(previousKeys);
+    const staged = Object.fromEntries(Object.entries(writes).map(([key, value]) => [`${stagingPrefix}${key}`, value]));
+    await chrome.storage.local.set({ [stagingPrefix + 'manifest']: { transactionId, keys: Object.keys(writes), createdAt: Date.now() }, ...staged });
+    const stagedRead = await chrome.storage.local.get(Object.keys(staged));
+    if (Object.keys(staged).some((key) => stagedRead[key] === undefined)) throw new Error('BACKUP_STAGE_VERIFY_FAILED');
+    try {
+      await chrome.storage.local.set(writes);
+      const committed = await chrome.storage.local.get([V4_META_KEY, V4_GLOBAL_SETTINGS_KEY]);
+      if ((committed[V4_META_KEY] as AppMetadata | undefined)?.activeWorkspaceId !== backup.meta.activeWorkspaceId) throw new Error('BACKUP_COMMIT_VERIFY_FAILED');
+      await cleanup();
+    } catch (error) {
+      const rollback: Record<string, unknown> = {};
+      for (const key of previousKeys) if (previous[key] !== undefined) rollback[key] = previous[key];
+      await chrome.storage.local.set(rollback);
+      throw error;
+    }
+    await chrome.storage.local.remove(previousKeys.filter((key) => !(key in writes)));
   } else {
     const currentKeys = currentMeta.workspaceOrder.map(workspaceKey);
     const nextStates = backup.workspaces.map((state) => ({ ...state, session: null }));
-    await chrome.storage.local.remove(currentKeys);
-    await chrome.storage.local.set({ ...Object.fromEntries(nextStates.map((state) => [workspaceKey(state.workspaceId), state])), [META_KEY]: { ...backup.meta, automationWorkspaceId: undefined } });
+    const writes = { ...Object.fromEntries(nextStates.map((state) => [workspaceKey(state.workspaceId), state])), [META_KEY]: { ...backup.meta, automationWorkspaceId: undefined } };
+    const previous = await chrome.storage.local.get([...currentKeys, META_KEY]);
+    const staged = Object.fromEntries(Object.entries(writes).map(([key, value]) => [`${stagingPrefix}${key}`, value]));
+    await chrome.storage.local.set({ [stagingPrefix + 'manifest']: { transactionId, keys: Object.keys(writes), createdAt: Date.now() }, ...staged });
+    const stagedRead = await chrome.storage.local.get(Object.keys(staged));
+    if (Object.keys(staged).some((key) => stagedRead[key] === undefined)) throw new Error('BACKUP_STAGE_VERIFY_FAILED');
+    try {
+      await chrome.storage.local.set(writes);
+      const committed = await chrome.storage.local.get(META_KEY);
+      if ((committed[META_KEY] as AppMetaState | undefined)?.activeWorkspaceId !== backup.meta.activeWorkspaceId) throw new Error('BACKUP_COMMIT_VERIFY_FAILED');
+      await cleanup();
+    } catch (error) {
+      const rollback: Record<string, unknown> = {};
+      for (const key of [...currentKeys, META_KEY]) if (previous[key] !== undefined) rollback[key] = previous[key];
+      await chrome.storage.local.set(rollback);
+      throw error;
+    }
+    await chrome.storage.local.remove([...currentKeys, META_KEY].filter((key) => !(key in writes)));
   }
   return validation.summary;
 }
