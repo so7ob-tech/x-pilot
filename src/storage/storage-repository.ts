@@ -1,4 +1,4 @@
-import type { AppMetaState, AppState, AutomationSession, PublishAttempt, QueueItem, Settings, TweetBank, Workspace, WorkspaceState } from '../domain/models';
+import type { AppMetaState, AppState, AutomationSession, HistoricalSession, PublishAttempt, QueueItem, Settings, TweetBank, Workspace, WorkspaceState } from '../domain/models';
 
 const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false };
 
@@ -15,11 +15,11 @@ function createWorkspaceRecord(name: string, description = '', color?: string, i
   return { id: crypto.randomUUID(), name, description, color, icon, favorite: false, archived: false, createdAt: now, updatedAt: now, lastActivityAt: now };
 }
 
-function createWorkspaceState(workspace: Workspace, settings: Settings, seed: Partial<AppState> = {}, banks: TweetBank[] = []): WorkspaceState {
+function createWorkspaceState(workspace: Workspace, settings: Settings, seed: Partial<AppState> & { historicalSessions?: HistoricalSession[] } = {}, banks: TweetBank[] = []): WorkspaceState {
   const queue = (seed.queue ?? []).map((item) => ({ ...item, workspaceId: workspace.id }));
   const session = seed.session ? { ...seed.session, workspaceId: workspace.id } : null;
   const history = (seed.history ?? []).map((attempt) => ({ ...attempt, workspaceId: workspace.id }));
-  return { workspaceId: workspace.id, workspace, banks, queue, session: session ? { ...session, ...settings } : null, history };
+  return { workspaceId: workspace.id, workspace, banks, queue, session: session ? { ...session, ...settings } : null, history, historicalSessions: seed.historicalSessions ?? [] };
 }
 
 async function readMeta(): Promise<AppMetaState | undefined> {
@@ -29,7 +29,7 @@ async function readMeta(): Promise<AppMetaState | undefined> {
 
 async function migrateIfNeeded(): Promise<AppMetaState> {
   const existing = await readMeta();
-  if (existing?.schemaVersion === 2) {
+  if (existing?.schemaVersion === 3) {
     const keys = existing.workspaceOrder.map(workspaceKey);
     const stored = await chrome.storage.local.get(keys);
     const current = stored[workspaceKey(existing.activeWorkspaceId)] as WorkspaceState | undefined;
@@ -44,6 +44,19 @@ async function migrateIfNeeded(): Promise<AppMetaState> {
     }
   }
 
+  if (existing?.schemaVersion === 2) {
+    const keys = existing.workspaceOrder.map(workspaceKey);
+    const stored = await chrome.storage.local.get(keys);
+    const upgraded = { ...existing, schemaVersion: 3 as const };
+    const updates: Record<string, WorkspaceState> = {};
+    for (const id of existing.workspaceOrder) {
+      const state = stored[workspaceKey(id)] as WorkspaceState | undefined;
+      if (state) updates[workspaceKey(id)] = { ...state, historicalSessions: state.historicalSessions ?? [] };
+    }
+    await chrome.storage.local.set({ ...updates, [META_KEY]: upgraded });
+    return upgraded;
+  }
+
   const legacy = await chrome.storage.local.get([LEGACY_STATE_KEY, LEGACY_SETTINGS_KEY]);
   const legacyState = legacy[LEGACY_STATE_KEY] as Partial<AppState> | undefined;
   const settings: Settings = { ...defaultSettings, ...(legacy[LEGACY_SETTINGS_KEY] as Partial<Settings> | undefined) };
@@ -53,7 +66,7 @@ async function migrateIfNeeded(): Promise<AppMetaState> {
     banks.push({ id: crypto.randomUUID(), workspaceId: workspace.id, name: 'البنك المرحّل', url: legacyState.session.bankUrl, createdAt: Date.now(), updatedAt: Date.now() });
   }
   const migrated = createWorkspaceState(workspace, settings, legacyState ?? {}, banks);
-  const meta: AppMetaState = { schemaVersion: 2, activeWorkspaceId: workspace.id, workspaceOrder: [workspace.id], globalSettings: settings };
+  const meta: AppMetaState = { schemaVersion: 3, activeWorkspaceId: workspace.id, workspaceOrder: [workspace.id], globalSettings: settings };
   await chrome.storage.local.set({ [workspaceKey(workspace.id)]: migrated, [META_KEY]: meta });
   return meta;
 }
@@ -177,7 +190,15 @@ export async function addAttempt(attempt: PublishAttempt): Promise<void> {
   const workspaceId = attempt.workspaceId ?? meta.automationWorkspaceId ?? meta.activeWorkspaceId;
   await updateWorkspaceState(workspaceId, (state) => ({ ...state, history: [...state.history, { ...attempt, workspaceId }].slice(-2000) }));
 }
-
+export async function getHistoricalSessions(workspaceId: string): Promise<HistoricalSession[]> {
+  return (await getWorkspaceState(workspaceId)).historicalSessions ?? [];
+}
+export async function saveHistoricalSession(workspaceId: string, session: HistoricalSession): Promise<void> {
+  await updateWorkspaceState(workspaceId, (state) => ({ ...state, historicalSessions: [...(state.historicalSessions ?? []).filter((item) => item.id !== session.id), session].sort((a, b) => b.startedAt - a.startedAt).slice(0, 500) }));
+}
+export async function updateHistoricalSession(workspaceId: string, sessionId: string, patch: Partial<HistoricalSession>): Promise<void> {
+  await updateWorkspaceState(workspaceId, (state) => ({ ...state, historicalSessions: (state.historicalSessions ?? []).map((session) => session.id === sessionId ? { ...session, ...patch, updatedAt: Date.now() } : session) }));
+}
 export async function getSettings(): Promise<Settings> { return (await getMeta()).globalSettings; }
 export async function saveSettings(settings: Settings): Promise<void> { const meta = await getMeta(); await saveMeta({ ...meta, globalSettings: settings }); }
 export async function saveSession(session: AutomationSession | null): Promise<void> { await updateState((state) => ({ ...state, session })); }

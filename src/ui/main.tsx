@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AppMetaState, AppState, QueueItem, RuntimeMessage, RuntimeStatus, Settings, Workspace } from '../domain/models';
+import type { AppMetaState, AppState, HistoricalSession, QueueItem, RuntimeMessage, RuntimeStatus, Settings, Workspace } from '../domain/models';
 import { defaultSettings } from '../domain/models';
 import { getTweetPreview } from '../extraction/tweet-preview';
 import './styles.css';
 
 const initialState: AppState = { queue: [], session: null, history: [] };
 const initialRuntimeStatus: RuntimeStatus = { engineStatus: 'IDLE', connection: 'NOT_REQUIRED', checkedAt: 0 };
-type TabId = 'operation' | 'queue' | 'workspaces' | 'settings';
+type TabId = 'operation' | 'queue' | 'history' | 'workspaces' | 'settings';
 
 function send(message: RuntimeMessage): Promise<any> { return chrome.runtime.sendMessage(message); }
 
@@ -22,6 +22,7 @@ function App() {
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus>(initialRuntimeStatus);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [meta, setMeta] = useState<AppMetaState | null>(null);
+  const [sessionHistory, setSessionHistory] = useState<HistoricalSession[]>([]);
   const session = state.session;
   const published = useMemo(() => state.queue.filter((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED').length, [state.queue]);
   const failed = useMemo(() => state.queue.filter((item) => item.status === 'FAILED').length, [state.queue]);
@@ -37,7 +38,9 @@ function App() {
   const refresh = async () => { const next = await send({ type: 'GET_STATE' }); if (next && !next.error) setState(next); };
   const refreshWorkspaces = async () => { const next = await send({ type: 'GET_WORKSPACES' }); if (next?.workspaces) { setWorkspaces(next.workspaces); setMeta(next.meta); } };
   const refreshRuntimeStatus = async () => { const next = await send({ type: 'GET_RUNTIME_STATUS' }); if (next && !next.error) setRuntimeStatus(next); };
-  useEffect(() => { void refresh(); void refreshWorkspaces(); void refreshRuntimeStatus(); const listener = (message: any) => { if (message.type === 'STATE_UPDATED') { setState(message.state); void refreshWorkspaces(); void refreshRuntimeStatus(); } }; chrome.runtime.onMessage.addListener(listener); return () => chrome.runtime.onMessage.removeListener(listener); }, []);
+  const refreshHistory = async () => { const next = await send({ type: 'GET_SESSION_HISTORY', workspaceId: meta?.activeWorkspaceId }); if (next?.sessions) setSessionHistory(next.sessions); };
+  useEffect(() => { void refresh(); void refreshWorkspaces(); void refreshRuntimeStatus(); const listener = (message: any) => { if (message.type === 'STATE_UPDATED') { setState(message.state); void refreshWorkspaces(); void refreshRuntimeStatus(); void refreshHistory(); } }; chrome.runtime.onMessage.addListener(listener); return () => chrome.runtime.onMessage.removeListener(listener); }, []);
+  useEffect(() => { if (meta?.activeWorkspaceId) void refreshHistory(); }, [meta?.activeWorkspaceId]);
   useEffect(() => { const timer = window.setInterval(() => void refreshRuntimeStatus(), 1500); return () => window.clearInterval(timer); }, []);
   useEffect(() => { const timer = window.setInterval(() => setNowMs(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const act = async (message: RuntimeMessage, success?: string) => { const result = await send(message); if (result?.error) setNotice(result.error); else { if (result?.queue) setState(result); else await refresh(); if (success) setNotice(success); } };
@@ -69,6 +72,7 @@ function App() {
     <nav className="tabs-bar" aria-label="حالة X-Pilot والتبويبات"><div className="tabs" role="tablist">
       <TabButton id="operation" activeTab={activeTab} onSelect={setActiveTab} icon="▶" label="التشغيل" />
       <TabButton id="queue" activeTab={activeTab} onSelect={setActiveTab} icon="☷" label="بنك التغريدات" />
+      <TabButton id="history" activeTab={activeTab} onSelect={setActiveTab} icon="◷" label="السجل" />
       <TabButton id="workspaces" activeTab={activeTab} onSelect={setActiveTab} icon="▦" label="مساحات العمل" />
       <TabButton id="settings" activeTab={activeTab} onSelect={setActiveTab} icon="⚙" label="الإعدادات" />
     </div><div className="runtime-indicators" aria-live="polite"><StatusIndicator kind="connection" value={runtimeStatus.connection} label={connectionLabel(runtimeStatus.connection)} /><StatusIndicator kind="engine" value={runtimeStatus.engineStatus} label={engineLabel(runtimeStatus.engineStatus)} /></div></nav>
@@ -86,6 +90,11 @@ function App() {
     {activeTab === 'queue' && <section className="tab-panel" role="tabpanel" aria-label="بنك التغريدات وقائمة Queue">
       <section className="card"><h2>بنك التغريدات</h2><div className="row bank-row"><input value={bankUrl} onChange={(event) => setBankUrl(event.target.value)} placeholder="https://example.com/tweet-bank" dir="ltr" /><button onClick={() => void extract()}>استخراج الروابط</button></div><div className="extract-options"><label><input type="radio" checked={extractMode === 'REPLACE'} onChange={() => setExtractMode('REPLACE')} /> استبدال العناصر غير المنفذة</label><label><input type="radio" checked={extractMode === 'APPEND'} onChange={() => setExtractMode('APPEND')} /> إضافة روابط جديدة فقط</label></div><p className="muted">لا يتم استبدال Queue بصمت. اختر الاستبدال أو الإضافة، وتُزال الروابط المكررة تلقائيًا في وضع الإضافة.</p></section>
       <section className="card"><div className="section-heading"><h2>Queue</h2><span className="session-progress">{state.queue.length} عنصر</span><button onClick={() => void act({ type: 'CLEAR_COMPLETED' })}>Clear Completed</button></div><div className="queue">{state.queue.map((item) => <QueueRow key={item.id} item={item} onAction={act} />)}{!state.queue.length && <p className="muted">لم تُستخرج روابط بعد.</p>}</div></section>
+    </section>}
+
+    {activeTab === 'history' && <section className="tab-panel" role="tabpanel" aria-label="سجل الجلسات">
+      <section className="card"><div className="section-heading"><div><span className="eyebrow">SESSION HISTORY</span><h2>سجل جلسات النشر</h2></div><button onClick={() => void refreshHistory()}>تحديث</button></div><p className="muted">كل جلسة تشغيل مستقلة محفوظة محليًا داخل Workspace الحالية.</p></section>
+      <section className="card history-list">{sessionHistory.map((record) => <article className="history-row" key={record.id}><div><strong>{new Date(record.startedAt).toLocaleString('ar')}</strong><small>{record.status} · {record.totalItems} عناصر · {record.intervalMinutes} دقيقة</small></div><div className="history-counts"><span>✓ {record.publishedCount}</span><span>! {record.failedCount}</span><span>↷ {record.skippedCount}</span></div></article>)}{!sessionHistory.length && <p className="muted">لا توجد جلسات محفوظة بعد.</p>}</section>
     </section>}
 
     {activeTab === 'workspaces' && <section className="tab-panel" role="tabpanel" aria-label="مساحات العمل">

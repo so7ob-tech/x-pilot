@@ -50,8 +50,8 @@ test('UI and README use the official X-Pilot branding asset', () => {
   assert.match(readme, /public\/icons/);
 });
 
-test('Side Panel exposes operation, tweet-bank, and settings tabs', () => {
-  assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'workspaces' \| 'settings'/);
+test('Side Panel exposes operation, tweet-bank, history, and settings tabs', () => {
+  assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'history' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /aria-label="حالة X-Pilot والتبويبات"/);
   assert.match(uiSource, /label="التشغيل"/);
   assert.match(uiSource, /label="بنك التغريدات"/);
@@ -186,7 +186,7 @@ test('storage migration preserves legacy data and creates an idempotent default 
   assert.match(storage, /LEGACY_STATE_KEY = 'xQueueState'/);
   assert.match(storage, /LEGACY_SETTINGS_KEY = 'xQueueSettings'/);
   assert.match(storage, /META_KEY = 'xPilotMeta'/);
-  assert.match(storage, /schemaVersion: 2/);
+  assert.match(storage, /schemaVersion: 3/);
   assert.match(storage, /مساحة العمل الافتراضية/);
   assert.match(storage, /await chrome\.storage\.local\.set\(\{ \[workspaceKey\(workspace\.id\)\]: migrated, \[META_KEY\]: meta \}\)/);
   assert.match(storage, /if \(existing\?\.schemaVersion === 2\)/);
@@ -199,7 +199,7 @@ test('Workspace runtime operations expose explicit ownership and management APIs
   assert.match(serviceWorker, /await claimAutomationOwner\(message\.workspaceId \?\? meta\.activeWorkspaceId\)/);
   assert.match(serviceWorker, /GET_WORKSPACES/);
   assert.match(serviceWorker, /SET_ACTIVE_WORKSPACE/);
-  assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'workspaces' \| 'settings'/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'history' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /function WorkspaceCard/);
 });
 
