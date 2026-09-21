@@ -1,4 +1,4 @@
-import type { AppState, AutomationSession, BankDiffResult, BankSnapshotItem, BulkActionResult, BulkQueueAction, ContentInspection, DryRunItemResult, DryRunResult, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
+import type { AppState, AutomationSession, BankDiffResult, BankSnapshotItem, BulkActionResult, BulkQueueAction, ContentInspection, DiagnosticsCheck, DiagnosticsResult, DryRunItemResult, DryRunResult, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
 import { createHistoricalSession, defaultSettings } from '../domain/models';
 import { classifyBankDiff, mergeSelectedDiffItems } from '../domain/bank-diff';
 import { fingerprintTweet } from '../domain/content-fingerprint';
@@ -184,6 +184,71 @@ async function inspectTab(tabId: number): Promise<ContentInspection> {
     await ensureContentScript(tabId);
     return await chrome.tabs.sendMessage(tabId, { type: 'X_INSPECT' });
   }
+}
+
+async function runDiagnostics(): Promise<DiagnosticsResult> {
+  const checks: DiagnosticsCheck[] = [];
+  const manifest = chrome.runtime.getManifest();
+  const result: DiagnosticsResult = { checkedAt: Date.now(), extensionVersion: manifest.version, schemaVersion: 'UNKNOWN', checks, safe: true };
+  let state: AppState | undefined;
+  try {
+    const meta = await getMeta();
+    state = await getState();
+    result.schemaVersion = meta.schemaVersion;
+    result.activeWorkspaceId = meta.activeWorkspaceId;
+    result.automationWorkspaceId = meta.automationWorkspaceId;
+    if (state.session) result.runningSession = { id: state.session.id, status: state.session.status, currentItemId: state.session.currentItemId };
+    checks.push({ id: 'storage', label: 'Storage', status: 'OK', message: 'Storage: OK', details: `schemaVersion ${meta.schemaVersion}` });
+    checks.push({ id: 'active-workspace', label: 'Active Workspace', status: meta.activeWorkspaceId ? 'OK' : 'FAIL', message: meta.activeWorkspaceId ? 'Active Workspace: OK' : 'Active Workspace: FAIL', details: meta.activeWorkspaceId || 'لا توجد Workspace نشطة' });
+    checks.push({ id: 'automation-workspace', label: 'Automation Workspace', status: meta.automationWorkspaceId ? 'OK' : 'WARN', message: meta.automationWorkspaceId ? 'Automation Workspace: OK' : 'Automation Workspace: غير مستخدمة', details: meta.automationWorkspaceId });
+    checks.push({ id: 'running-session', label: 'Running Session', status: state.session && ['RUNNING', 'WAITING', 'PAUSED', 'SCHEDULED'].includes(state.session.status) ? 'OK' : 'WARN', message: state.session ? `Running Session: ${state.session.status}` : 'Running Session: لا توجد جلسة نشطة', details: state.session?.id });
+  } catch (error) {
+    checks.push({ id: 'storage', label: 'Storage', status: 'FAIL', message: 'Storage: FAIL', details: error instanceof Error ? error.message : 'STORAGE_READ_FAILED' });
+  }
+  try {
+    const alarms = await chrome.alarms.getAll();
+    const expected = state?.session?.status === 'SCHEDULED' ? SCHEDULE_ALARM_NAME : ALARM_NAME;
+    const alarm = alarms.find((candidate) => candidate.name === expected);
+    if (alarm) { result.alarm = { name: alarm.name, scheduledTime: alarm.scheduledTime, periodInMinutes: alarm.periodInMinutes }; checks.push({ id: 'alarm', label: 'Alarm', status: 'OK', message: 'Alarm: OK', details: alarm.name }); }
+    else checks.push({ id: 'alarm', label: 'Alarm', status: state?.session && ['RUNNING', 'WAITING', 'SCHEDULED'].includes(state.session.status) ? 'WARN' : 'OK', message: state?.session && ['RUNNING', 'WAITING', 'SCHEDULED'].includes(state.session.status) ? 'Alarm: WARN' : 'Alarm: OK', details: 'لا يوجد Alarm مطلوب حاليًا' });
+  } catch (error) { checks.push({ id: 'alarm', label: 'Alarm', status: 'FAIL', message: 'Alarm: FAIL', details: error instanceof Error ? error.message : 'ALARM_READ_FAILED' }); }
+  let temporaryTabId: number | undefined;
+  try {
+    let tabId = state?.session?.automationTabId;
+    if (tabId) { try { await chrome.tabs.get(tabId); } catch { tabId = undefined; } }
+    if (!tabId) {
+      const xTabs = await chrome.tabs.query({ url: ['https://x.com/*', 'https://twitter.com/*'] });
+      tabId = xTabs[0]?.id;
+    }
+    if (!tabId) {
+      const temporary = await chrome.tabs.create({ url: 'https://x.com/home', active: false });
+      if (!temporary.id) throw new Error('DIAGNOSTICS_TAB_CREATE_FAILED');
+      temporaryTabId = temporary.id; tabId = temporary.id;
+      await waitForTabLoad(tabId);
+    }
+    result.automationTabId = state?.session?.automationTabId;
+    const inspected = await inspectTab(tabId);
+    checks.push({ id: 'x-session', label: 'X Login', status: inspected.pageKind === 'X' ? 'OK' : inspected.pageKind === 'LOGIN' ? 'FAIL' : 'WARN', message: inspected.pageKind === 'X' ? 'X Session: OK' : `X Session: ${inspected.pageKind}`, details: inspected.reason });
+    checks.push({ id: 'adapter', label: 'Adapter status', status: inspected.ok ? 'OK' : 'WARN', message: inspected.ok ? 'Adapter status: OK' : 'Adapter status: WARN', details: inspected.reason });
+    checks.push({ id: 'composer', label: 'Composer detection', status: inspected.composerFound ? 'OK' : 'WARN', message: inspected.composerFound ? 'Composer detection: OK' : 'Composer detection: WARN' });
+    checks.push({ id: 'post-button', label: 'Post Button detection', status: inspected.postButtonFound && inspected.postButtonEnabled ? 'OK' : 'WARN', message: inspected.postButtonFound && inspected.postButtonEnabled ? 'Post Button detection: OK' : 'Post Button detection: WARN' });
+  } catch (error) {
+    for (const [id, label] of [['x-session', 'X Login'], ['adapter', 'Adapter status'], ['composer', 'Composer detection'], ['post-button', 'Post Button detection']] as const) checks.push({ id, label, status: 'NOT_CHECKED', message: `${label}: NOT_CHECKED`, details: error instanceof Error ? error.message : 'DIAGNOSTICS_INSPECTION_FAILED' });
+  } finally {
+    if (temporaryTabId !== undefined) await chrome.tabs.remove(temporaryTabId).catch(() => undefined);
+  }
+  try {
+    const permissions = await chrome.permissions.getAll();
+    const hasXOrigin = permissions.origins?.some((origin) => origin === 'https://x.com/*' || origin === 'https://twitter.com/*') || false;
+    const hasCore = ['storage', 'alarms', 'tabs', 'scripting'].every((permission) => permissions.permissions?.includes(permission as chrome.runtime.ManifestPermission));
+    checks.push({ id: 'permissions', label: 'Permissions', status: hasCore && hasXOrigin ? 'OK' : 'WARN', message: hasCore && hasXOrigin ? 'Permissions: OK' : 'Permissions: WARN', details: `core=${hasCore} x=${hasXOrigin}` });
+  } catch (error) { checks.push({ id: 'permissions', label: 'Permissions', status: 'FAIL', message: 'Permissions: FAIL', details: error instanceof Error ? error.message : 'PERMISSIONS_READ_FAILED' }); }
+  const automationTabId = state?.session?.automationTabId;
+  if (automationTabId) {
+    try { await chrome.tabs.get(automationTabId); checks.push({ id: 'automation-tab', label: 'Automation Tab', status: 'OK', message: 'Automation Tab: OK', details: String(automationTabId) }); }
+    catch { checks.push({ id: 'automation-tab', label: 'Automation Tab', status: 'WARN', message: 'Automation Tab: WARN', details: 'التبويب المسجل غير موجود' }); }
+  } else checks.push({ id: 'automation-tab', label: 'Automation Tab', status: 'WARN', message: 'Automation Tab: غير موجود', details: 'لا توجد جلسة أتمتة نشطة' });
+  return result;
 }
 
 function classifyDryRunInspection(inspection: ContentInspection): DryRunItemResult['status'] {
@@ -614,6 +679,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
       return performPreflight(workspaceId);
     }
+    case 'RUN_DIAGNOSTICS': return runDiagnostics();
     case 'GET_DRY_RUN': {
       const stored = await chrome.storage.local.get(DRY_RUN_KEY);
       return stored[DRY_RUN_KEY] ?? null;
