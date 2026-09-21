@@ -11,7 +11,7 @@ import { decideAlarmFailure } from '../domain/alarm-recovery';
 import { applyBulkStatus, reorderSelected } from '../domain/bulk-queue';
 import { shouldNeverRepublish } from '../domain/data-integrity.ts';
 import { getStoredLocale, formatDateTimeForLocale, translateForLocale } from '../i18n/translate.ts';
-import { acquireStartLock, addAttempt, archiveBank, claimAutomationOwner, cleanupRestoreStaging, clearWorkspaceProfile, createBank, createWorkspace, deleteBank, deleteWorkspace, exportBackup, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceSettings, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, releaseStartLock, restoreBank, restoreBackup, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceProfile, updateWorkspaceState, archiveWorkspace, restoreWorkspace, validateBackup } from '../storage/storage-repository';
+import { acquireStartLock, addAttempt, archiveBank, claimAutomationOwner, cleanupRestoreStaging, clearWorkspaceProfile, createBank, createWorkspace, deleteBank, deleteWorkspace, exportBackup, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceSettings, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, releaseStartLock, renewStartLock, restoreBank, restoreBackup, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceProfile, updateWorkspaceState, archiveWorkspace, restoreWorkspace, validateBackup } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
 const SCHEDULE_ALARM_NAME = 'x-queue-scheduled-start';
@@ -747,11 +747,11 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     }
     case 'CREATE_BANK': {
       const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
-      return createBank(workspaceId, message.name, message.url, message.description);
+      await createBank(workspaceId, message.name, message.url, message.description); return getWorkspaceState(workspaceId);
     }
     case 'UPDATE_BANK': {
       const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
-      return updateBank(workspaceId, message.bankId, message.patch);
+      await updateBank(workspaceId, message.bankId, message.patch); return getWorkspaceState(workspaceId);
     }
     case 'ARCHIVE_BANK': {
       const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
@@ -855,6 +855,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       const meta = await getMeta();
       const workspaceId = message.workspaceId ?? meta.activeWorkspaceId;
       const startToken = await acquireStartLock(workspaceId);
+      const leaseHeartbeat = setInterval(() => { void renewStartLock(startToken).then((healthy) => { if (!healthy) console.error('X-Pilot START lease lost', { workspaceId }); }).catch((error) => console.error('X-Pilot START lease renewal failed', error)); }, 5_000);
       try {
         const existing = await getWorkspaceState(workspaceId);
         if (existing.session && ['RUNNING', 'WAITING', 'PAUSED', 'SCHEDULED'].includes(existing.session.status)) throw new Error('START_ALREADY_ACTIVE');
@@ -881,6 +882,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
         }
         await broadcast(state); await processCurrentItem(); return getState();
       } finally {
+        clearInterval(leaseHeartbeat);
         await releaseStartLock(startToken);
       }
     }
@@ -943,13 +945,13 @@ async function handleAlarmFailure(alarmName: string, error: unknown): Promise<vo
   try {
     const state = await getState();
     const session = state.session;
-    if (!session || !['WAITING', 'SCHEDULED'].includes(session.status)) return;
+    if (!session || !['RUNNING', 'WAITING', 'SCHEDULED'].includes(session.status)) return;
     const alarmStatus = session.status === 'SCHEDULED' ? 'SCHEDULED' : 'WAITING';
     const retryAt = alarmStatus === 'WAITING' ? session.nextRunAt : session.scheduledStartAt;
     const decision = decideAlarmFailure(alarmStatus, retryAt, session.alarmFailureCount ?? 0, Date.now());
     if (decision.action === 'RETRY') {
       await chrome.alarms.create(decision.alarmName, { when: decision.when, persistAcrossSessions: true });
-      const retried = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, alarmFailureCount: decision.failureCount, lastAlarmError: message, updatedAt: Date.now() } : null }));
+      const retried = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, status: current.session.status === 'RUNNING' ? 'WAITING' : current.session.status, nextRunAt: current.session.status === 'RUNNING' ? decision.when : current.session.nextRunAt, alarmFailureCount: decision.failureCount, lastAlarmError: message, updatedAt: Date.now() } : null }));
       await notifyEvent('X-Pilot: فشل مؤقت', `فشل Alarm وسيُعاد المحاولة (${decision.failureCount}/3).`);
       await broadcast(retried);
       return;

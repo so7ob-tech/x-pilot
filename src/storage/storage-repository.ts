@@ -349,6 +349,16 @@ export async function releaseStartLock(token: string): Promise<void> {
   if ((stored[START_LOCK_KEY] as PersistedStartLock | undefined)?.token === token) await chrome.storage.local.remove(START_LOCK_KEY);
 }
 
+export async function renewStartLock(token: string, now = Date.now(), ttlMs = 15_000): Promise<boolean> {
+  const stored = await chrome.storage.local.get(START_LOCK_KEY);
+  const existing = stored[START_LOCK_KEY] as PersistedStartLock | undefined;
+  if (!existing || existing.token !== token) return false;
+  const renewed: PersistedStartLock = { ...existing, expiresAt: now + ttlMs };
+  await chrome.storage.local.set({ [START_LOCK_KEY]: renewed });
+  const verified = await chrome.storage.local.get(START_LOCK_KEY);
+  return (verified[START_LOCK_KEY] as PersistedStartLock | undefined)?.token === token;
+}
+
 export async function addAttempt(attempt: PublishAttempt | LegacyPublishAttempt): Promise<void> {
   const meta = await getMeta();
   const workspaceId = attempt.workspaceId ?? meta.automationWorkspaceId ?? meta.activeWorkspaceId;
