@@ -9,7 +9,7 @@ const paths: Record<IconName, string> = {
 };
 
 export function Icon({ name, size = 18, label }: { name: IconName; size?: number; label?: string }) {
-  return <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden={label ? undefined : true} role={label ? 'img' : undefined} aria-label={label}>{paths[name].split(/(?=[A-Z])/).map((path, index) => <path key={`${name}-${index}`} d={path} />)}</svg>;
+  return <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden={label ? undefined : true} role={label ? 'img' : undefined} aria-label={label}><path d={paths[name]} /></svg>;
 }
 
 export function Button({ tone = 'secondary', size = 'md', icon, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'primary' | 'secondary' | 'danger' | 'ghost'; size?: 'sm' | 'md'; icon?: IconName }) {
