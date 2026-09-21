@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AppMetaState, AppState, HistoricalSession, QueueItem, RuntimeMessage, RuntimeStatus, Settings, Workspace } from '../domain/models';
+import type { AppMetaState, AppState, HistoricalSession, QueueItem, RuntimeMessage, RuntimeStatus, Settings, TweetBank, Workspace } from '../domain/models';
 import { defaultSettings } from '../domain/models';
 import { getTweetPreview } from '../extraction/tweet-preview';
 import './styles.css';
@@ -23,6 +23,8 @@ function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [meta, setMeta] = useState<AppMetaState | null>(null);
   const [sessionHistory, setSessionHistory] = useState<HistoricalSession[]>([]);
+  const [banks, setBanks] = useState<TweetBank[]>([]);
+  const [selectedBankId, setSelectedBankId] = useState('');
   const session = state.session;
   const published = useMemo(() => state.queue.filter((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED').length, [state.queue]);
   const failed = useMemo(() => state.queue.filter((item) => item.status === 'FAILED').length, [state.queue]);
@@ -37,25 +39,30 @@ function App() {
 
   const refresh = async () => { const next = await send({ type: 'GET_STATE' }); if (next && !next.error) setState(next); };
   const refreshWorkspaces = async () => { const next = await send({ type: 'GET_WORKSPACES' }); if (next?.workspaces) { setWorkspaces(next.workspaces); setMeta(next.meta); } };
+  const refreshBanks = async () => { const next = await send({ type: 'GET_BANKS', workspaceId: meta?.activeWorkspaceId }); if (next?.banks) { setBanks(next.banks); if (!selectedBankId && next.banks.find((bank: TweetBank) => !bank.archived)) setSelectedBankId(next.banks.find((bank: TweetBank) => !bank.archived).id); } };
   const refreshRuntimeStatus = async () => { const next = await send({ type: 'GET_RUNTIME_STATUS' }); if (next && !next.error) setRuntimeStatus(next); };
   const refreshHistory = async () => { const next = await send({ type: 'GET_SESSION_HISTORY', workspaceId: meta?.activeWorkspaceId }); if (next?.sessions) setSessionHistory(next.sessions); };
-  useEffect(() => { void refresh(); void refreshWorkspaces(); void refreshRuntimeStatus(); const listener = (message: any) => { if (message.type === 'STATE_UPDATED') { setState(message.state); void refreshWorkspaces(); void refreshRuntimeStatus(); void refreshHistory(); } }; chrome.runtime.onMessage.addListener(listener); return () => chrome.runtime.onMessage.removeListener(listener); }, []);
+  useEffect(() => { void refresh(); void refreshWorkspaces(); void refreshBanks(); void refreshRuntimeStatus(); const listener = (message: any) => { if (message.type === 'STATE_UPDATED') { setState(message.state); void refreshWorkspaces(); void refreshBanks(); void refreshRuntimeStatus(); void refreshHistory(); } }; chrome.runtime.onMessage.addListener(listener); return () => chrome.runtime.onMessage.removeListener(listener); }, []);
   useEffect(() => { if (meta?.activeWorkspaceId) void refreshHistory(); }, [meta?.activeWorkspaceId]);
+  useEffect(() => { if (meta?.activeWorkspaceId) void refreshBanks(); }, [meta?.activeWorkspaceId]);
   useEffect(() => { const timer = window.setInterval(() => void refreshRuntimeStatus(), 1500); return () => window.clearInterval(timer); }, []);
   useEffect(() => { const timer = window.setInterval(() => setNowMs(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const act = async (message: RuntimeMessage, success?: string) => { const result = await send(message); if (result?.error) setNotice(result.error); else { if (result?.queue) setState(result); else await refresh(); if (success) setNotice(success); } };
   const extract = async () => {
-    if (!bankUrl.trim()) return setNotice('أدخل رابط بنك التغريدات أولًا');
+    const selectedBank = banks.find((bank) => bank.id === selectedBankId && !bank.archived);
+    const extractionUrl = selectedBank?.url ?? bankUrl.trim();
+    if (!extractionUrl) return setNotice('اختر بنكًا أو أدخل رابط بنك التغريدات أولًا');
     let parsed: URL;
-    try { parsed = new URL(bankUrl.trim()); } catch { return setNotice('رابط البنك غير صالح'); }
+    try { parsed = new URL(extractionUrl); } catch { return setNotice('رابط البنك غير صالح'); }
     if (!['http:', 'https:'].includes(parsed.protocol)) return setNotice('يجب أن يبدأ رابط البنك بـ http أو https');
     const originPattern = `${parsed.protocol}//${parsed.host}/*`;
     const granted = await chrome.permissions.request({ origins: [originPattern] });
     if (!granted) return setNotice('لم يتم منح صلاحية قراءة نطاق بنك التغريدات');
     if (extractMode === 'REPLACE' && state.queue.some((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED') && !window.confirm('تحتوي Queue على عناصر منشورة. الاستبدال سيترك العناصر المنشورة محفوظة في السجل لكنه سيزيلها من Queue الحالية. هل تريد المتابعة؟')) return;
-    const result = await send({ type: 'EXTRACT_BANK', bankUrl: bankUrl.trim(), workspaceId: meta?.activeWorkspaceId, mode: extractMode });
+    const result = await send({ type: 'EXTRACT_BANK', bankId: selectedBank?.id, bankUrl: extractionUrl, workspaceId: meta?.activeWorkspaceId, mode: extractMode });
     if (result?.error) return setNotice(`فشل الاستخراج: ${result.error}`);
     if (result?.queue) setState(result);
+    await refreshBanks();
     setNotice(`تم العثور على ${result?.queue?.length ?? 0} رابطًا`);
   };
   const start = async () => { if (settings.confirmBeforeStart && !window.confirm(`بدء نشر ${remaining} عنصر؟`)) return; await act({ type: 'START', confirmed: true, workspaceId: meta?.activeWorkspaceId }, 'بدأت الجلسة'); };
@@ -65,6 +72,9 @@ function App() {
   const archive = async (workspaceId: string) => { const result = await send({ type: 'ARCHIVE_WORKSPACE', workspaceId }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); await refresh(); };
   const restore = async (workspaceId: string) => { const result = await send({ type: 'RESTORE_WORKSPACE', workspaceId }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); };
   const remove = async (workspace: Workspace) => { if (!window.confirm(`سيتم حذف Workspace "${workspace.name}" وبياناتها المحلية. هل تريد المتابعة؟`)) return; const result = await send({ type: 'DELETE_WORKSPACE', workspaceId: workspace.id, confirmed: true }); if (result?.error) return setNotice(result.error); await refreshWorkspaces(); await refresh(); };
+  const createNewBank = async () => { const name = window.prompt('اسم بنك التغريدات؟'); if (!name?.trim()) return; const url = window.prompt('رابط البنك؟'); if (!url?.trim()) return; const result = await send({ type: 'CREATE_BANK', workspaceId: meta?.activeWorkspaceId, name: name.trim(), url: url.trim() }); if (result?.error) return setNotice(result.error); setSelectedBankId(result.id); await refreshBanks(); };
+  const archiveSelectedBank = async (bank: TweetBank) => { const result = await send({ type: bank.archived ? 'RESTORE_BANK' : 'ARCHIVE_BANK', workspaceId: meta?.activeWorkspaceId, bankId: bank.id }); if (result?.error) return setNotice(result.error); await refreshBanks(); };
+  const deleteSelectedBank = async (bank: TweetBank) => { if (!window.confirm(`حذف البنك "${bank.name}"؟`)) return; const result = await send({ type: 'DELETE_BANK', workspaceId: meta?.activeWorkspaceId, bankId: bank.id, confirmed: true }); if (result?.error) return setNotice(result.error); if (selectedBankId === bank.id) setSelectedBankId(''); await refreshBanks(); };
 
   return <main className="shell">
     <header className="brand-header"><div className="brand-lockup"><img className="brand-logo" src={logoUrl} alt="X-Pilot" /><div><span className="eyebrow">LOCAL-FIRST · MV3</span><h1>قائمة نشر X</h1></div></div><span className={`status status-${session?.status ?? 'IDLE'}`}>{session?.status ?? 'IDLE'}</span></header>
@@ -88,7 +98,7 @@ function App() {
     </section>}
 
     {activeTab === 'queue' && <section className="tab-panel" role="tabpanel" aria-label="بنك التغريدات وقائمة Queue">
-      <section className="card"><h2>بنك التغريدات</h2><div className="row bank-row"><input value={bankUrl} onChange={(event) => setBankUrl(event.target.value)} placeholder="https://example.com/tweet-bank" dir="ltr" /><button onClick={() => void extract()}>استخراج الروابط</button></div><div className="extract-options"><label><input type="radio" checked={extractMode === 'REPLACE'} onChange={() => setExtractMode('REPLACE')} /> استبدال العناصر غير المنفذة</label><label><input type="radio" checked={extractMode === 'APPEND'} onChange={() => setExtractMode('APPEND')} /> إضافة روابط جديدة فقط</label></div><p className="muted">لا يتم استبدال Queue بصمت. اختر الاستبدال أو الإضافة، وتُزال الروابط المكررة تلقائيًا في وضع الإضافة.</p></section>
+      <section className="card"><div className="section-heading"><h2>بنوك التغريدات</h2><button className="primary" onClick={() => void createNewBank()}>+ إضافة بنك</button></div><div className="bank-cards">{banks.map((bank) => { const bankItems = state.queue.filter((item) => item.sourceBankId === bank.id || (!item.sourceBankId && item.sourceBankUrl === bank.url)); const bankPublished = bankItems.filter((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED').length; return <article className={`bank-card ${selectedBankId === bank.id ? 'selected' : ''} ${bank.archived ? 'archived' : ''}`} key={bank.id} onClick={() => !bank.archived && setSelectedBankId(bank.id)}><div className="bank-card-heading"><strong>{bank.favorite ? '★ ' : ''}{bank.name}</strong><span>{bank.archived ? 'مؤرشف' : 'نشط'}</span></div><small dir="ltr">{bank.url}</small><div className="bank-card-meta"><span>{bank.lastExtractedCount ?? 0} روابط</span><span>{bankItems.length - bankPublished} متبقٍ</span><span>{bankPublished} منشور</span></div><div className="bank-card-actions"><button onClick={(event) => { event.stopPropagation(); void extract(); }} disabled={bank.archived}>استخراج</button><button onClick={(event) => { event.stopPropagation(); void archiveSelectedBank(bank); }}>{bank.archived ? 'استعادة' : 'أرشفة'}</button><button className="danger" onClick={(event) => { event.stopPropagation(); void deleteSelectedBank(bank); }}>حذف</button></div></article>; })}{!banks.length && <p className="muted">أضف أول بنك تغريدات إلى Workspace الحالية.</p>}</div><div className="row bank-row"><input value={bankUrl} onChange={(event) => setBankUrl(event.target.value)} placeholder="رابط مؤقت لبنك غير محفوظ" dir="ltr" /><button onClick={() => void extract()}>استخراج المحدد</button></div><div className="extract-options"><label><input type="radio" checked={extractMode === 'REPLACE'} onChange={() => setExtractMode('REPLACE')} /> استبدال العناصر غير المنفذة</label><label><input type="radio" checked={extractMode === 'APPEND'} onChange={() => setExtractMode('APPEND')} /> إضافة روابط جديدة فقط</label></div><p className="muted">اختر Bank محددة ثم استخدم استخراج. Replace وAppend يعملان داخل Workspace الحالية فقط.</p></section>
       <section className="card"><div className="section-heading"><h2>Queue</h2><span className="session-progress">{state.queue.length} عنصر</span><button onClick={() => void act({ type: 'CLEAR_COMPLETED' })}>Clear Completed</button></div><div className="queue">{state.queue.map((item) => <QueueRow key={item.id} item={item} onAction={act} />)}{!state.queue.length && <p className="muted">لم تُستخرج روابط بعد.</p>}</div></section>
     </section>}
 

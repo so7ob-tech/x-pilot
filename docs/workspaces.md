@@ -8,7 +8,7 @@ X-Pilot treats a **Workspace** as the top-level local container for one project.
 
 The `Workspace` entity stores identity and lifecycle metadata such as name, description, favorite, archived, and activity timestamps. `WorkspaceState` contains the Workspace metadata together with its Queue, `TweetBank` records, `AutomationSession`, and `PublishAttempt` history. Queue items, sessions, and attempts carry a `workspaceId` so background operations can verify ownership explicitly.
 
-`xPilotMeta` stores the schema version, active Workspace, Workspace ordering, global settings, and the single `automationWorkspaceId`. Workspace payloads are stored separately under `xPilotWorkspace:<id>` so changing one Workspace does not rewrite the complete application state.
+`xPilotMeta` stores the schema version, active Workspace, Workspace ordering, global settings, and the single `automationWorkspaceId`. Workspace payloads are stored separately under `xPilotWorkspace:<id>` so changing one Workspace does not rewrite the complete application state. Each Workspace may contain multiple independent `TweetBank` records. Queue items retain both `sourceBankId` and the legacy `sourceBankUrl` so provenance remains visible and older data remains readable.
 
 ## Migration
 
@@ -30,7 +30,7 @@ A later hardening phase should encode Workspace and Session identities directly 
 
 ## Workspace operations
 
-The Workspaces tab provides a compact switcher and cards for opening, creating, archiving, and deleting Workspaces. Archiving preserves all data and removes the Workspace from the default active selector. Deletion requires explicit confirmation, cannot delete the last Workspace, and cannot delete the running Workspace.
+The Workspaces tab provides a compact switcher and cards for opening, creating, archiving, and deleting Workspaces. The Queue tab provides Bank cards for creating, selecting, extracting, archiving, restoring, and deleting Tweet Banks. Archiving preserves all data and removes the Workspace or Bank from the default active selector. Deletion requires explicit confirmation, cannot delete the last Workspace, and cannot delete a running Workspace or Bank.
 
 ## Privacy and permissions
 
