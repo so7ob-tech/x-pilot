@@ -27,6 +27,7 @@
 - Dry Run / Test Mode لفحص Composer والمحتوى وزر Post دون النشر، مع اختبار عنصر واحد أو Queue كاملة بالتتابع.
 - Full Backup / Restore محلي بصيغة JSON لجميع Workspaces والبنوك وQueue والسجل والإعدادات، مع تحقق قبل الاستعادة.
 - Scheduled Sessions وPublishing Windows حسب أيام الأسبوع والمنطقة الزمنية، مع Workspace Profiles وإشعارات مهمة وChrome Badge.
+- نتائج Dry Run تعرض رقم العنصر وأول 10 كلمات فقط دون الروابط الطويلة، والجدولة تنشئ جلسة قابلة للتنفيذ حتى عند عدم وجود Session سابقة.
 
 ## التطوير
 

@@ -224,10 +224,10 @@ async function runDryRun(mode: 'FIRST_ITEM' | 'ENTIRE_QUEUE', workspaceId?: stri
         await activateAutomationTab(tabId);
         await wait(300);
         const inspection = await inspectTab(tabId);
-        itemResult = { queueItemId: item.id, targetUrl: item.targetUrl, status: classifyDryRunInspection(inspection), checkedAt: Date.now(), durationMs: Date.now() - started, pageKind: inspection.pageKind, composerFound: inspection.composerFound, contentPresent: inspection.contentPresent, postButtonFound: inspection.postButtonFound, postButtonEnabled: inspection.postButtonEnabled, reason: inspection.reason };
+        itemResult = { queueItemId: item.id, position: item.position, targetUrl: item.targetUrl, status: classifyDryRunInspection(inspection), checkedAt: Date.now(), durationMs: Date.now() - started, pageKind: inspection.pageKind, composerFound: inspection.composerFound, contentPresent: inspection.contentPresent, postButtonFound: inspection.postButtonFound, postButtonEnabled: inspection.postButtonEnabled, reason: inspection.reason };
       } catch (error) {
         const reason = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
-        itemResult = { queueItemId: item.id, targetUrl: item.targetUrl, status: reason === 'INVALID_URL' ? 'INVALID_URL' : 'ERROR', checkedAt: Date.now(), durationMs: Date.now() - started, pageKind: 'ERROR', composerFound: false, contentPresent: false, postButtonFound: false, postButtonEnabled: false, reason, error: reason };
+        itemResult = { queueItemId: item.id, position: item.position, targetUrl: item.targetUrl, status: reason === 'INVALID_URL' ? 'INVALID_URL' : 'ERROR', checkedAt: Date.now(), durationMs: Date.now() - started, pageKind: 'ERROR', composerFound: false, contentPresent: false, postButtonFound: false, postButtonEnabled: false, reason, error: reason };
       }
       result.items.push(itemResult);
       result.checked = result.items.length;
@@ -493,7 +493,18 @@ async function scheduleSession(workspaceId: string, startAt: number): Promise<Ap
   const settings = await getWorkspaceSettings(workspaceId);
   const scheduled = await updateWorkspaceState(workspaceId, (current) => ({
     ...current,
-    session: current.session ? { ...current.session, ...settings, status: 'SCHEDULED', scheduledStartAt: startAt, nextRunAt: startAt, currentItemId: current.session.currentItemId ?? current.queue.find((item) => item.status === 'PENDING')?.id, updatedAt: Date.now() } : null,
+    session: {
+      ...(current.session ?? {
+        id: crypto.randomUUID(), workspaceId, bankId: current.banks.find((bank) => !bank.archived)?.id, bankUrl: current.banks.find((bank) => !bank.archived)?.url ?? '', status: 'SCHEDULED' as const, currentIndex: current.queue.find((item) => item.status === 'PENDING')?.position ?? 0, total: current.queue.length, version: 1,
+      }),
+      ...settings,
+      workspaceId,
+      status: 'SCHEDULED',
+      scheduledStartAt: startAt,
+      nextRunAt: startAt,
+      currentItemId: current.session?.currentItemId ?? current.queue.find((item) => item.status === 'PENDING')?.id,
+      updatedAt: Date.now(),
+    },
   }));
   await chrome.alarms.clear(SCHEDULE_ALARM_NAME);
   await chrome.alarms.create(SCHEDULE_ALARM_NAME, { when: startAt, persistAcrossSessions: true });
@@ -506,7 +517,18 @@ async function scheduleSession(workspaceId: string, startAt: number): Promise<Ap
 async function handleScheduledStart(): Promise<void> {
   const state = await getState();
   if (!state.session || state.session.status !== 'SCHEDULED') return;
-  if ((state.session.scheduledStartAt ?? 0) > Date.now()) return;
+  if ((state.session.scheduledStartAt ?? 0) > Date.now()) {
+    await chrome.alarms.create(SCHEDULE_ALARM_NAME, { when: state.session.scheduledStartAt!, persistAcrossSessions: true });
+    return;
+  }
+  const item = state.session.currentItemId ? state.queue.find((candidate) => candidate.id === state.session!.currentItemId) : undefined;
+  if (!item || !canStartItem(item.status)) {
+    await chrome.alarms.clear(SCHEDULE_ALARM_NAME);
+    const failed = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'FAILED', scheduledStartAt: undefined, nextRunAt: undefined, updatedAt: Date.now() } : null }));
+    await notifyEvent('X-Pilot: فشل بدء الجدولة', 'لا يوجد عنصر Queue قابل للتشغيل عند موعد الجدولة.');
+    await broadcast(failed);
+    return;
+  }
   const running = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'RUNNING', startedAt: Date.now(), scheduledStartAt: undefined, nextRunAt: undefined, updatedAt: Date.now() } : null }));
   await chrome.alarms.clear(SCHEDULE_ALARM_NAME);
   await notifyEvent('X-Pilot: بدأت الجلسة', 'بدأت جلسة النشر المجدولة.');

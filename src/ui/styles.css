@@ -120,7 +120,8 @@ button.danger { color: #a42020; }
 .history-row:last-child { border-bottom: 0; }
 .history-row small { display: block; margin-top: 3px; color: #6b7b91; }
 .history-counts { display: flex; gap: 8px; color: #53667e; font-size: 11px; white-space: nowrap; }
-.queue-row { align-items: flex-start; border-top: 1px solid #edf1f6; padding-top: 9px; }
+.queue-row { align-items: flex-start; border-top: 1px solid #edf1f6; padding-top: 9px; min-width: 0; flex-wrap: wrap; }
+.dry-run-preview { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #3c4a5c; }
 .position { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; background: #eef4fb; color: #3b587a; border-radius: 50%; font-size: 12px; }
 .item-main { min-width: 0; flex: 1; }
 .preview { color: #1d2d45; display: -webkit-box; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: 3; -webkit-box-orient: vertical; font-size: 13px; line-height: 1.55; }
