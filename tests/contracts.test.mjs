@@ -103,6 +103,23 @@ test('Full Backup / Restore validates before replacing local data', () => {
   assert.match(uiSource, /استعادة نسخة JSON/);
 });
 
+test('Phase 2 exposes persistent scheduling, profiles, notifications, and Badge controls', () => {
+  assert.match(models, /SCHEDULED/);
+  assert.match(models, /SCHEDULE/);
+  assert.match(models, /RESCHEDULE/);
+  assert.match(models, /CANCEL_SCHEDULE/);
+  assert.match(models, /publishingWindows/);
+  assert.match(models, /badgeMode/);
+  assert.match(serviceWorker, /SCHEDULE_ALARM_NAME/);
+  assert.match(serviceWorker, /chrome\.alarms\.create\(SCHEDULE_ALARM_NAME/);
+  assert.match(serviceWorker, /getNextAllowedPublishingTime/);
+  assert.match(serviceWorker, /chrome\.notifications\.create/);
+  assert.match(serviceWorker, /chrome\.action\.setBadgeText/);
+  assert.match(uiSource, /Schedule/);
+  assert.match(uiSource, /Reschedule/);
+  assert.match(uiSource, /Publishing Windows JSON/);
+});
+
 test('tab bar renders accessible live connection and engine indicators', () => {
   assert.match(uiSource, /GET_RUNTIME_STATUS/);
   assert.match(uiSource, /window\.setInterval\(\(\) => void refreshRuntimeStatus\(\), 1500\)/);

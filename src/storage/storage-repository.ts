@@ -1,6 +1,6 @@
 import type { AppMetaState, AppState, AutomationSession, BackupEnvelope, BackupSummary, BackupValidation, HistoricalSession, PublishAttempt, QueueItem, Settings, TweetBank, Workspace, WorkspaceState } from '../domain/models';
 
-const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false, duplicatePolicy: 'BLOCK' };
+const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false, duplicatePolicy: 'BLOCK', publishingWindows: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', notificationsEnabled: true, badgeMode: 'COUNT' };
 
 export const LEGACY_STATE_KEY = 'xQueueState';
 export const LEGACY_SETTINGS_KEY = 'xQueueSettings';
@@ -237,6 +237,24 @@ export async function updateHistoricalSession(workspaceId: string, sessionId: st
 }
 export async function getSettings(): Promise<Settings> { return { ...defaultSettings, ...(await getMeta()).globalSettings }; }
 export async function saveSettings(settings: Settings): Promise<void> { const meta = await getMeta(); await saveMeta({ ...meta, globalSettings: settings }); }
+export async function getWorkspaceSettings(workspaceId: string): Promise<Settings> {
+  const global = await getSettings();
+  const workspace = (await getWorkspaceState(workspaceId)).workspace;
+  return { ...global, ...(workspace.automationProfile ?? {}), publishingWindows: workspace.automationProfile?.publishingWindows ?? global.publishingWindows, timezone: workspace.automationProfile?.timezone ?? global.timezone };
+}
+export async function updateWorkspaceProfile(workspaceId: string, profile: Partial<Settings>): Promise<Workspace> {
+  const state = await getWorkspaceState(workspaceId);
+  const automationProfile = { ...(state.workspace.automationProfile ?? {}), ...profile };
+  const workspace = { ...state.workspace, automationProfile, updatedAt: Date.now(), lastActivityAt: Date.now() };
+  await saveWorkspaceState({ ...state, workspace });
+  return workspace;
+}
+export async function clearWorkspaceProfile(workspaceId: string): Promise<Workspace> {
+  const state = await getWorkspaceState(workspaceId);
+  const { automationProfile: _removed, ...workspaceWithoutProfile } = state.workspace;
+  await saveWorkspaceState({ ...state, workspace: { ...workspaceWithoutProfile, updatedAt: Date.now(), lastActivityAt: Date.now() } });
+  return { ...workspaceWithoutProfile, updatedAt: Date.now(), lastActivityAt: Date.now() };
+}
 export async function saveSession(session: AutomationSession | null): Promise<void> { await updateState((state) => ({ ...state, session })); }
 export async function saveQueue(queue: QueueItem[]): Promise<void> { await updateState((state) => ({ ...state, queue })); }
 

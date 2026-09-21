@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.13.0] - Unreleased
+
+### Added
+
+- Scheduled Sessions with persistent Chrome Alarm scheduling, rescheduling, cancellation, and startup recovery.
+- Workspace Publishing Windows with weekday rules, multiple windows, overnight support, and explicit time zones.
+- Workspace Automation Profiles inheriting from Global Defaults.
+- Opt-in Chrome Notifications for important session events without per-success noise.
+- Chrome Badge modes for remaining count, status, or no Badge.
+
 ## [0.12.0] - Unreleased
 
 ### Added
