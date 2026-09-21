@@ -1,9 +1,9 @@
 import type { AppState, AutomationSession, ContentInspection, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
-import { defaultSettings } from '../domain/models';
+import { createHistoricalSession, defaultSettings } from '../domain/models';
 import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
-import { addAttempt, claimAutomationOwner, createWorkspace, deleteWorkspace, getAutomationOwner, getMeta, getSettings, getState as getActiveState, getWorkspaceState, listWorkspaces, releaseAutomationOwner, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateState as updateActiveState, updateWorkspace, updateWorkspaceState, archiveWorkspace, restoreWorkspace } from '../storage/storage-repository';
+import { addAttempt, claimAutomationOwner, createWorkspace, deleteWorkspace, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceState, listWorkspaces, releaseAutomationOwner, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceState, archiveWorkspace, restoreWorkspace } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
 const AUTOMATION_TAB_KEY = 'automationTabId';
@@ -70,6 +70,20 @@ async function recoverPersistedState(): Promise<AppState> {
   }
   await broadcast(state);
   return state;
+}
+
+async function syncHistoricalSession(state: AppState, status?: 'RUNNING' | 'PAUSED' | 'WAITING' | 'COMPLETED' | 'STOPPED' | 'FAILED', failureReason?: string): Promise<void> {
+  const session = state.session;
+  if (!state.workspaceId || !session?.historicalSessionId) return;
+  await updateHistoricalSession(state.workspaceId, session.historicalSessionId, {
+    ...(status ? { status } : {}),
+    ...(status === 'COMPLETED' || status === 'STOPPED' || status === 'FAILED' ? { completedAt: Date.now() } : {}),
+    ...(failureReason ? { failureReason } : {}),
+    totalItems: state.queue.length,
+    publishedCount: state.queue.filter((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED').length,
+    failedCount: state.queue.filter((item) => item.status === 'FAILED').length,
+    skippedCount: state.queue.filter((item) => item.status === 'SKIPPED').length,
+  });
 }
 
 async function getOrCreateAutomationTab(session: AutomationSession): Promise<number> {
@@ -207,6 +221,7 @@ async function processCurrentItem(): Promise<void> {
       session: current.session ? { ...current.session, status: nextStatus, currentItemId: nextItem?.id, currentIndex: nextItem?.position ?? current.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? finishedAt : current.session.completedAt, updatedAt: finishedAt } : null,
       history: [...current.history, { id: crypto.randomUUID(), queueItemId: item.id, link: item.targetUrl, timestamp: finishedAt, attemptNumber: item.attempts + 1, action: 'PUBLISH', result: finalStatus }]
     }));
+    await syncHistoricalSession(nextState, nextStatus === 'COMPLETED' ? 'COMPLETED' : 'WAITING');
     await chrome.alarms.clear(ALARM_NAME);
     if (nextRunAt) await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
     await restoreActiveTab(previousActiveTabId);
@@ -245,6 +260,7 @@ async function processCurrentItem(): Promise<void> {
       session: currentState.session ? { ...currentState.session, status: nextStatus, currentItemId: nextItemId, currentIndex: nextItemIndex ?? currentState.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? Date.now() : currentState.session.completedAt, updatedAt: Date.now() } : null,
       history: [...currentState.history, { id: crypto.randomUUID(), queueItemId: item.id, link: item.targetUrl, timestamp: Date.now(), attemptNumber: item.attempts + 1, action: 'PUBLISH', result: failedStatus, error: message }]
     }));
+    await syncHistoricalSession(failedState, nextStatus === 'COMPLETED' ? 'COMPLETED' : nextStatus === 'PAUSED' ? 'PAUSED' : 'WAITING', message);
     await chrome.alarms.clear(ALARM_NAME);
     if (nextRunAt) await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
     await restoreActiveTab(previousActiveTabId);
@@ -260,8 +276,9 @@ async function advanceSession(): Promise<void> {
   const state = await getState();
   if (!state.session || state.session.status !== 'WAITING') return;
   const next = getNextRunnableItem(state.queue, state.session.currentItemId);
-  if (!next) {
-    const completed = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'COMPLETED', completedAt: Date.now(), nextRunAt: undefined, updatedAt: Date.now() } : null }));
+    if (!next) {
+      const completed = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'COMPLETED', completedAt: Date.now(), nextRunAt: undefined, updatedAt: Date.now() } : null }));
+    await syncHistoricalSession(completed, 'COMPLETED');
     const visibleState = completed.session ? await closeAutomationTabIfConfigured(completed.session) : completed;
     if (completed.workspaceId) await releaseAutomationOwner(completed.workspaceId);
     await broadcast(visibleState);
@@ -321,6 +338,10 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     case 'GET_STATE': return getActiveState();
     case 'GET_WORKSPACES': return { workspaces: await listWorkspaces(true), meta: await getMeta() };
     case 'GET_WORKSPACE_STATE': return getWorkspaceState(message.workspaceId ?? (await getMeta()).activeWorkspaceId);
+    case 'GET_SESSION_HISTORY': {
+      const workspaceId = message.workspaceId ?? (await getMeta()).activeWorkspaceId;
+      return { workspaceId, sessions: await getHistoricalSessions(workspaceId) };
+    }
     case 'CREATE_WORKSPACE': return createWorkspace(message.name, message.description, message.color, message.icon);
     case 'UPDATE_WORKSPACE': return updateWorkspace(message.workspaceId, message.patch);
     case 'ARCHIVE_WORKSPACE': return archiveWorkspace(message.workspaceId);
@@ -340,6 +361,12 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       await claimAutomationOwner(message.workspaceId ?? meta.activeWorkspaceId);
       const settings = await getSettings();
       const state = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, ...settings, status: 'RUNNING', startedAt: current.session.startedAt ?? Date.now(), currentItemId: current.session.currentItemId ?? current.queue.find((item) => item.status === 'PENDING')?.id, updatedAt: Date.now() } : null }));
+      if (state.workspaceId && state.session && !state.session.historicalSessionId) {
+        const historical = createHistoricalSession(state.session, state.queue);
+        await saveHistoricalSession(state.workspaceId, historical);
+        const linked = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, historicalSessionId: historical.id, updatedAt: Date.now() } : null }));
+        await broadcast(linked); await processCurrentItem(); return getState();
+      }
       await broadcast(state); await processCurrentItem(); return getState();
     }
     case 'PAUSE': {
@@ -349,6 +376,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
         queue: state.queue.map((item) => item.id === state.session?.currentItemId && (item.status === 'OPENING' || item.status === 'READY') ? { ...item, status: 'PENDING', operationId: undefined, updatedAt: Date.now() } : item),
         session: state.session ? { ...state.session, status: 'PAUSED', pausedAt: Date.now(), nextRunAt: state.session.status === 'WAITING' ? state.session.nextRunAt : undefined, updatedAt: Date.now() } : null
       }));
+      await syncHistoricalSession(paused, 'PAUSED');
       await broadcast(paused);
       return paused;
     }
@@ -377,6 +405,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
         queue: state.queue.map((item) => item.id === state.session?.currentItemId && (item.status === 'OPENING' || item.status === 'READY') ? { ...item, status: 'PENDING', operationId: undefined, updatedAt: Date.now() } : item),
         session: state.session ? { ...state.session, status: 'STOPPED', nextRunAt: undefined, updatedAt: Date.now() } : null
       }));
+      await syncHistoricalSession(stopped, 'STOPPED');
       const result = stopped.session ? await closeAutomationTabIfConfigured(stopped.session) : stopped;
       if (result.workspaceId) await releaseAutomationOwner(result.workspaceId);
       return result;

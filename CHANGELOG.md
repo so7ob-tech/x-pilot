@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0] - Unreleased
+
+### Added
+
+- Adds independent historical Automation Session records per Workspace.
+- Adds a local Session History tab with status and result counters.
+- Migrates Workspace storage from schema v2 to schema v3 while preserving existing Queue and attempts.
+- Links runtime publish attempts and terminal session states to the historical session record.
+
 ## [0.5.1] - Unreleased
 
 ### Fixed
