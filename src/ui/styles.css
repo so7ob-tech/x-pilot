@@ -138,6 +138,8 @@ button.danger:hover, .ui-button-danger:hover { border-color: #df9c99; }
 .shell-operation .operation-hero { gap: 9px; }
 .shell-operation .operation-hero h2 { margin-bottom: 5px; }
 .shell-operation .hero-metric strong { font-size: 27px; }
+.dashboard-countdown { grid-column: 1 / -1; margin-top: 0; border-color: #c8d9ef; color: var(--color-primary); background: var(--color-surface-2); }
+.dashboard-countdown strong { color: var(--color-primary); }
 .hero-copy p { margin: 0; color: var(--color-text-2); font-size: 12px; }
 .hero-metric { display: grid; justify-items: end; align-content: center; }
 .hero-metric strong { color: var(--color-primary); font-size: 32px; line-height: 1; font-variant-numeric: tabular-nums; }
