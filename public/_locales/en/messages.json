@@ -1,0 +1,5 @@
+{
+  "extensionName": { "message": "X-Pilot" },
+  "extensionDescription": { "message": "Local X publishing queue management with scheduling and recovery." },
+  "actionTitle": { "message": "Open X-Pilot" }
+}

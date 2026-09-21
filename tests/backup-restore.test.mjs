@@ -33,8 +33,8 @@ test('Restore is blocked while automation is active and is exposed in RTL settin
   assert.match(worker, /BACKUP_RESTORE_WHILE_AUTOMATION_ACTIVE/);
   assert.match(worker, /case 'VALIDATE_BACKUP'/);
   assert.match(worker, /case 'RESTORE_BACKUP'/);
-  assert.match(ui, /Full Backup \/ Restore/);
-  assert.match(ui, /تصدير نسخة كاملة/);
-  assert.match(ui, /استعادة نسخة JSON/);
-  assert.match(ui, /BACKUP_RESTORE_CONFIRMATION_REQUIRED|سيتم استبدال البيانات المحلية الحالية/);
+  assert.match(ui, /backup\.title/);
+  assert.match(ui, /backup\.export/);
+  assert.match(ui, /backup\.restore/);
+  assert.match(ui, /confirm\.restoreBackup|BACKUP_RESTORE_CONFIRMATION_REQUIRED/);
 });

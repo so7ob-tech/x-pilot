@@ -1,0 +1,5 @@
+{
+  "extensionName": { "message": "X-Pilot" },
+  "extensionDescription": { "message": "إدارة محلية لقائمة نشر X مع الجدولة واستعادة الحالة." },
+  "actionTitle": { "message": "فتح X-Pilot" }
+}
