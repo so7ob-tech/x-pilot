@@ -42,7 +42,8 @@ test('Preflight domain output is language-neutral and renderable in both locales
 
 test('reported Queue, session, history, analytics, workspace, and settings labels resolve in both locales', () => {
   const keys = [
-    'ui.remaining', 'banks.hint', 'sessions.eyebrow', 'sessions.count', 'sessions.noMatch',
+    'ui.remaining', 'banks.hint', 'banks.count', 'queue.count', 'queue.pageSize', 'queue.selectPage',
+    'sessions.eyebrow', 'sessions.count', 'sessions.noMatch',
     'history.eyebrow', 'history.count', 'history.noMatch', 'analytics.eyebrow',
     'analytics.derivedHint', 'analytics.totalWorkspaces', 'analytics.totalPublished',
     'analytics.totalFailures', 'analytics.sessionsOverTime', 'analytics.workspaceComparison',
