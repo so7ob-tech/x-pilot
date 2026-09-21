@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.0] - Unreleased
+
+### Added
+
+- Advanced Search & Filters across Queue, Tweet Banks, Sessions, and Publish History.
+- Status, Bank, Session, date-range, Workspace, and combined text filters.
+- Dedicated Sessions tab and reusable RTL search toolbar with result counts and clear-filters action.
+- Session and Workspace identifiers on publish history entries for accurate filtering.
+
 ## [0.13.3] - Patch
 
 ### Changed

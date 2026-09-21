@@ -50,8 +50,8 @@ test('UI and README use the official X-Pilot branding asset', () => {
   assert.match(readme, /public\/icons/);
 });
 
-test('Side Panel exposes operation, startup-tests, tweet-bank, history, and settings tabs', () => {
-  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'history' \| 'workspaces' \| 'settings'/);
+test('Side Panel exposes operation, startup-tests, tweet-bank, sessions, history, and settings tabs', () => {
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /aria-label="حالة X-Pilot والتبويبات"/);
   assert.match(uiSource, /label="التشغيل"/);
   assert.match(uiSource, /label="بنك التغريدات"/);
@@ -135,6 +135,23 @@ test('Scheduled Alarm creates a session when Queue has no prior session and repo
   assert.match(serviceWorker, /status: 'SCHEDULED'/);
   assert.match(serviceWorker, /لا يوجد عنصر Queue قابل للتشغيل/);
   assert.match(serviceWorker, /handleScheduledStart/);
+});
+
+test('Feature 13 exposes shared advanced search filters across all entity views', () => {
+  assert.match(uiSource, /SearchToolbar/);
+  assert.match(uiSource, /label="الجلسات"/);
+  assert.match(uiSource, /label="السجل"/);
+  assert.match(uiSource, /filterQueue/);
+  assert.match(uiSource, /filterBanks/);
+  assert.match(uiSource, /filterSessions/);
+  assert.match(uiSource, /filterHistory/);
+  assert.match(uiSource, /فلترة حسب الحالة/);
+  assert.match(uiSource, /فلترة حسب البنك/);
+  assert.match(uiSource, /فلترة حسب الجلسة/);
+  assert.match(uiSource, /فلترة حسب Workspace/);
+  assert.match(uiSource, /من تاريخ/);
+  assert.match(uiSource, /إلى تاريخ/);
+  assert.match(models, /sessionId\?: string/);
 });
 
 test('tab bar renders accessible live connection and engine indicators', () => {
@@ -257,7 +274,7 @@ test('Workspace runtime operations expose explicit ownership and management APIs
   assert.match(serviceWorker, /await claimAutomationOwner\(message\.workspaceId \?\? meta\.activeWorkspaceId\)/);
   assert.match(serviceWorker, /GET_WORKSPACES/);
   assert.match(serviceWorker, /SET_ACTIVE_WORKSPACE/);
-  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'history' \| 'workspaces' \| 'settings'/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /function WorkspaceCard/);
 });
 
