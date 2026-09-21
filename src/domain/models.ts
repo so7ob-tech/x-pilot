@@ -72,7 +72,7 @@ export type RuntimeMessage =
   | { type: 'EXPORT_BACKUP' } | { type: 'VALIDATE_BACKUP'; backup: unknown } | { type: 'RESTORE_BACKUP'; backup: unknown; confirmed: boolean }
   | { type: 'SKIP_CURRENT' } | { type: 'RETRY_ITEM'; itemId: string } | { type: 'REORDER'; itemId: string; direction: 'up' | 'down' } | { type: 'DELETE_ITEM'; itemId: string } | { type: 'CLEAR_COMPLETED' } | { type: 'BULK_ACTION'; action: BulkQueueAction; itemIds: string[]; workspaceId?: string; bankId?: string; confirmed?: boolean } | { type: 'UPDATE_SETTINGS'; settings: Settings; workspaceId?: string };
 export type ContentMessage = { type: 'X_INSPECT' } | { type: 'X_PUBLISH' };
-export interface ContentInspection { ok: boolean; pageKind: 'X' | 'LOGIN' | 'CHALLENGE' | 'ERROR' | 'UNKNOWN'; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string; }
+export interface ContentInspection { ok: boolean; pageKind: 'X' | 'LOGIN' | 'CHALLENGE' | 'ERROR' | 'UNKNOWN'; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string; dailyPostLimitReached?: boolean; }
 
 export function historicalStatus(status: SessionStatus): HistoricalSessionStatus | undefined {
   return status === 'IDLE' ? undefined : status;

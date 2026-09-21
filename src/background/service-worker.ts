@@ -332,7 +332,7 @@ async function waitForPublishReady(tabId: number, timeoutMs = 25000, intervalMs 
   while (Date.now() < deadline) {
     lastInspection = await inspectTab(tabId);
     if (lastInspection.ok) return lastInspection;
-    if (lastInspection.pageKind === 'LOGIN' || lastInspection.pageKind === 'CHALLENGE' || lastInspection.pageKind === 'UNKNOWN') {
+    if (lastInspection.pageKind === 'LOGIN' || lastInspection.pageKind === 'CHALLENGE' || lastInspection.pageKind === 'UNKNOWN' || lastInspection.reason === 'X_DAILY_POST_LIMIT_REACHED') {
       throw new Error(lastInspection.reason ?? 'PUBLISH_CONTROLS_NOT_READY');
     }
     await wait(intervalMs);
@@ -388,6 +388,7 @@ async function processCurrentItem(): Promise<void> {
     const result = await chrome.tabs.sendMessage(tabId, { type: 'X_PUBLISH' });
     await wait(1800);
     const after = await inspectTab(tabId);
+    if (after.dailyPostLimitReached || after.reason === 'X_DAILY_POST_LIMIT_REACHED') throw new Error('X_DAILY_POST_LIMIT_REACHED');
     if (!result?.ok) throw new Error(result?.reason ?? 'PUBLISH_FAILED');
     const finalStatus = after.composerFound && after.contentPresent ? 'PUBLISHED_UNVERIFIED' : 'PUBLISHED';
     const finishedAt = Date.now();
@@ -412,6 +413,22 @@ async function processCurrentItem(): Promise<void> {
     await broadcast(visibleState);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+    if (message === 'X_DAILY_POST_LIMIT_REACHED') {
+      const pausedState = await updateRuntimeState((currentState) => ({
+        ...currentState,
+        queue: currentState.queue.map((candidate) => candidate.id === item.id && candidate.operationId === operationId
+          ? { ...candidate, status: 'PENDING', attempts: item.attempts, lastError: message, operationId: undefined, updatedAt: Date.now() }
+          : candidate),
+        session: currentState.session ? { ...currentState.session, status: 'PAUSED', currentItemId: item.id, nextRunAt: undefined, updatedAt: Date.now() } : null,
+        history: [...currentState.history, { id: crypto.randomUUID(), workspaceId: currentState.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, timestamp: Date.now(), attemptNumber: item.attempts, action: 'PUBLISH', result: 'PAUSED', error: message }]
+      }));
+      await syncHistoricalSession(pausedState, 'PAUSED', message);
+      await chrome.alarms.clear(ALARM_NAME);
+      await restoreActiveTab(previousActiveTabId);
+      await notifyEvent('X-Pilot: تم إيقاف النشر', 'وصل حساب X إلى الحد الأقصى للمنشورات اليومية. لم يتم الانتقال إلى العنصر التالي.');
+      await broadcast(pausedState);
+      return;
+    }
     if (message.includes('LOGIN') || message.includes('PUBLISH_CONTROLS_NOT_READY')) await notifyEvent('X-Pilot: مطلوب تدخل', message.includes('LOGIN') ? 'تسجيل الدخول إلى X مطلوب.' : 'تعذر العثور على عناصر النشر.');
     if (message.includes('CHALLENGE') || message.includes('CAPTCHA')) await notifyEvent('X-Pilot: تحدٍ أمني', 'تم اكتشاف CAPTCHA أو Challenge وتوقفت الجلسة.');
     if (message === 'AUTOMATION_INTERRUPTED') {

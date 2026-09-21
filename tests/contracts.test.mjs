@@ -40,6 +40,14 @@ test('manifest declares the persistent workflow APIs', () => {
   assert.ok(manifest.side_panel?.default_path);
 });
 
+test('daily X posting limit pauses the session without advancing the Queue', () => {
+  assert.match(models, /dailyPostLimitReached\?: boolean/);
+  assert.match(serviceWorker, /X_DAILY_POST_LIMIT_REACHED/);
+  assert.match(serviceWorker, /status: 'PAUSED', currentItemId: item\.id, nextRunAt: undefined/);
+  assert.match(serviceWorker, /status: 'PENDING', attempts: item\.attempts/);
+  assert.match(serviceWorker, /chrome\.alarms\.clear\(ALARM_NAME\)/);
+});
+
 test('manifest declares official X-Pilot icon assets', () => {
   assert.equal(manifest.icons['16'], 'icons/icon16.png');
   assert.equal(manifest.icons['32'], 'icons/icon32.png');

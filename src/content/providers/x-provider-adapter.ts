@@ -17,6 +17,7 @@ const composerSelectors = [
 const publishTestIdPattern = /(?:tweet|post|publish).*button|button.*(?:tweet|post|publish)/iu;
 const excludedLabelPattern = /(?:إضافة|الكل|رد|reply|add|cancel|إلغاء)/iu;
 const publishLabelPattern = /^(?:نشر|نشر\s+المنشور|إرسال|post|tweet|publish|send)$/iu;
+const dailyPostLimitPattern = /(?:لقد\s+وصلت\s+إلى\s+الحد\s+الأقصى\s+لعدد\s+المنشورات\s+اليومية|الحد\s+الأقصى\s+لعدد\s+المنشورات\s+اليومية|you(?:'|’)?ve\s+reached\s+(?:the\s+)?daily\s+(?:post|posts?)\s+limit|daily\s+post(?:ing)?\s+limit|subscribe\s+to\s+premium.*limit)/iu;
 
 function findFirst(selectors: string[]): HTMLElement | null {
   for (const selector of selectors) {
@@ -44,6 +45,10 @@ export function normalizeControlLabel(value: string): string {
 export function isPublishButtonLabel(value: string): boolean {
   const label = normalizeControlLabel(value);
   return Boolean(label) && !excludedLabelPattern.test(label) && publishLabelPattern.test(label);
+}
+
+export function isDailyPostLimitMessage(value: string): boolean {
+  return dailyPostLimitPattern.test(value.normalize('NFKC'));
 }
 
 function isVisibleControl(element: HTMLElement): boolean {
@@ -92,12 +97,15 @@ export function inspect(): ContentInspection {
   if (body.includes('captcha') || body.includes('challenge')) {
     return { ok: false, pageKind: 'CHALLENGE', composerFound: false, contentPresent: false, postButtonFound: false, postButtonEnabled: false, reason: 'CAPTCHA_OR_SECURITY_CHALLENGE' };
   }
+  if (isDailyPostLimitMessage(body)) {
+    return { ok: false, pageKind: 'X', composerFound: false, contentPresent: false, postButtonFound: false, postButtonEnabled: false, reason: 'X_DAILY_POST_LIMIT_REACHED', dailyPostLimitReached: true };
+  }
   const composer = findFirst(composerSelectors);
   const postButton = findPostButton();
   const contentPresent = composer ? readText(composer).length > 0 : false;
   const postButtonEnabled = Boolean(postButton && isEnabledControl(postButton));
   const ok = Boolean(composer && contentPresent && postButton && postButtonEnabled);
-  return { ok, pageKind: 'X', composerFound: Boolean(composer), contentPresent, postButtonFound: Boolean(postButton), postButtonEnabled, reason: ok ? undefined : 'PUBLISH_CONTROLS_NOT_READY' };
+  return { ok, pageKind: 'X', composerFound: Boolean(composer), contentPresent, postButtonFound: Boolean(postButton), postButtonEnabled, reason: ok ? undefined : 'PUBLISH_CONTROLS_NOT_READY', dailyPostLimitReached: false };
 }
 
 export function publish(): ContentInspection {
