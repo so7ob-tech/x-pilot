@@ -6,9 +6,11 @@ import { runPreflight } from '../domain/preflight';
 import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
 import { extractLinksFromValues } from '../extraction/bank-parser';
-import { addAttempt, archiveBank, claimAutomationOwner, createBank, createWorkspace, deleteBank, deleteWorkspace, exportBackup, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, restoreBank, restoreBackup, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceState, archiveWorkspace, restoreWorkspace, validateBackup } from '../storage/storage-repository';
+import { getNextAllowedPublishingTime } from '../domain/scheduling';
+import { addAttempt, archiveBank, claimAutomationOwner, clearWorkspaceProfile, createBank, createWorkspace, deleteBank, deleteWorkspace, exportBackup, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceSettings, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, restoreBank, restoreBackup, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceProfile, updateWorkspaceState, archiveWorkspace, restoreWorkspace, validateBackup } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
+const SCHEDULE_ALARM_NAME = 'x-queue-scheduled-start';
 const bankDiffs = new Map<string, BankDiffResult>();
 const AUTOMATION_TAB_KEY = 'automationTabId';
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -47,6 +49,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 async function broadcast(state?: AppState) {
   const snapshot = state ?? await getState();
   await chrome.runtime.sendMessage({ type: 'STATE_UPDATED', state: snapshot }).catch(() => undefined);
+  await updateBadge(snapshot);
 }
 
 async function getRuntimeStatus(): Promise<RuntimeStatus> {
@@ -65,15 +68,32 @@ async function getRuntimeStatus(): Promise<RuntimeStatus> {
   }
 }
 
+async function notifyEvent(title: string, message: string): Promise<void> {
+  const settings = await getSettings();
+  if (!settings.notificationsEnabled || !chrome.notifications) return;
+  await chrome.notifications.create(`x-pilot-${Date.now()}`, { type: 'basic', iconUrl: 'icons/icon128.png', title, message });
+}
+
+async function updateBadge(state?: AppState): Promise<void> {
+  const settings = await getSettings();
+  const snapshot = state ?? await getState();
+  let text = '';
+  if (settings.badgeMode === 'COUNT') text = String(snapshot.queue.filter((item) => item.status === 'PENDING' || item.status === 'FAILED').length || '');
+  if (settings.badgeMode === 'STATUS') text = snapshot.session?.status === 'RUNNING' ? '▶' : snapshot.session?.status === 'PAUSED' ? 'Ⅱ' : snapshot.session?.status === 'FAILED' ? '!' : '';
+  await chrome.action.setBadgeText({ text });
+  await chrome.action.setBadgeBackgroundColor({ color: snapshot.session?.status === 'FAILED' ? '#b42318' : '#175fbe' });
+}
+
 async function recoverPersistedState(): Promise<AppState> {
   const current = await getState();
   const recovered = normalizeRecovery(current);
   const changed = JSON.stringify(recovered) !== JSON.stringify(current);
   const state = changed ? await updateRuntimeState(() => recovered) : current;
   await chrome.alarms.clear(ALARM_NAME);
-  if (hasFutureRecoveryAlarm(state)) {
-    await chrome.alarms.create(ALARM_NAME, { when: state.session!.nextRunAt!, persistAcrossSessions: true });
-  }
+  await chrome.alarms.clear(SCHEDULE_ALARM_NAME);
+  if (state.session?.status === 'SCHEDULED' && state.session.scheduledStartAt && state.session.scheduledStartAt > Date.now()) await chrome.alarms.create(SCHEDULE_ALARM_NAME, { when: state.session.scheduledStartAt, persistAcrossSessions: true });
+  if (hasFutureRecoveryAlarm(state)) await chrome.alarms.create(ALARM_NAME, { when: state.session!.nextRunAt!, persistAcrossSessions: true });
+  await updateBadge(state);
   await broadcast(state);
   return state;
 }
@@ -250,6 +270,16 @@ async function processCurrentItem(): Promise<void> {
   if (!session || session.status !== 'RUNNING' || !session.currentItemId) return;
   const item = state.queue.find((candidate) => candidate.id === session.currentItemId);
   if (!item || !canStartItem(item.status)) return;
+  const profile = await getWorkspaceSettings(state.workspaceId ?? session.workspaceId ?? (await getMeta()).activeWorkspaceId);
+  const allowedAt = getNextAllowedPublishingTime(Date.now(), profile.timezone, profile.publishingWindows);
+  if (allowedAt && allowedAt > Date.now() + 500) {
+    const waiting = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'WAITING', nextRunAt: allowedAt, updatedAt: Date.now() } : null }));
+    await chrome.alarms.clear(ALARM_NAME);
+    await chrome.alarms.create(ALARM_NAME, { when: allowedAt, persistAcrossSessions: true });
+    await notifyEvent('X-Pilot: خارج نافذة النشر', `سيستأنف النشر في ${new Date(allowedAt).toLocaleString()}`);
+    await broadcast(waiting);
+    return;
+  }
   const operationId = crypto.randomUUID();
   const startedAt = Date.now();
   await updateRuntimeState((current) => ({
@@ -278,7 +308,7 @@ async function processCurrentItem(): Promise<void> {
     const finalStatus = after.composerFound && after.contentPresent ? 'PUBLISHED_UNVERIFIED' : 'PUBLISHED';
     const finishedAt = Date.now();
     const nextItem = getNextPendingItem((await getState()).queue, item.id);
-    const nextRunAt = nextItem ? finishedAt + session.intervalMinutes * 60_000 : undefined;
+    const nextRunAt = nextItem ? getNextAllowedPublishingTime(finishedAt + profile.intervalMinutes * 60_000, profile.timezone, profile.publishingWindows) : undefined;
     const nextStatus = nextItem ? 'WAITING' : 'COMPLETED';
     const nextState = await updateRuntimeState((current) => ({
       ...current,
@@ -294,9 +324,12 @@ async function processCurrentItem(): Promise<void> {
       ? await closeAutomationTabIfConfigured(nextState.session)
       : nextState;
     if (nextStatus === 'COMPLETED' && nextState.workspaceId) await releaseAutomationOwner(nextState.workspaceId);
+    if (nextStatus === 'COMPLETED') await notifyEvent('X-Pilot: اكتملت الجلسة', 'اكتملت جميع عناصر Queue.');
     await broadcast(visibleState);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
+    if (message.includes('LOGIN') || message.includes('PUBLISH_CONTROLS_NOT_READY')) await notifyEvent('X-Pilot: مطلوب تدخل', message.includes('LOGIN') ? 'تسجيل الدخول إلى X مطلوب.' : 'تعذر العثور على عناصر النشر.');
+    if (message.includes('CHALLENGE') || message.includes('CAPTCHA')) await notifyEvent('X-Pilot: تحدٍ أمني', 'تم اكتشاف CAPTCHA أو Challenge وتوقفت الجلسة.');
     if (message === 'AUTOMATION_INTERRUPTED') {
       const interruptedState = await updateRuntimeState((current) => ({
         ...current,
@@ -452,6 +485,41 @@ async function performPreflight(workspaceId: string) {
   return runPreflight({ workspace, queue: state.queue, banks: state.banks, automationWorkspaceId: meta.automationWorkspaceId, alarmsAvailable: Boolean(chrome.alarms), permissionsGranted, settings, xInspection });
 }
 
+async function scheduleSession(workspaceId: string, startAt: number): Promise<AppState> {
+  if (!Number.isFinite(startAt) || startAt <= Date.now()) throw new Error('SCHEDULE_START_MUST_BE_IN_FUTURE');
+  const preflight = await performPreflight(workspaceId);
+  if (!preflight.ready) { await notifyEvent('X-Pilot: فشل فحص الجاهزية', preflight.summary); throw new Error(`PREFLIGHT_FAILED:${preflight.summary}`); }
+  await claimAutomationOwner(workspaceId);
+  const settings = await getWorkspaceSettings(workspaceId);
+  const scheduled = await updateWorkspaceState(workspaceId, (current) => ({
+    ...current,
+    session: current.session ? { ...current.session, ...settings, status: 'SCHEDULED', scheduledStartAt: startAt, nextRunAt: startAt, currentItemId: current.session.currentItemId ?? current.queue.find((item) => item.status === 'PENDING')?.id, updatedAt: Date.now() } : null,
+  }));
+  await chrome.alarms.clear(SCHEDULE_ALARM_NAME);
+  await chrome.alarms.create(SCHEDULE_ALARM_NAME, { when: startAt, persistAcrossSessions: true });
+  const state: AppState = { workspaceId: scheduled.workspaceId, queue: scheduled.queue, session: scheduled.session, history: scheduled.history };
+  await notifyEvent('X-Pilot: جلسة مجدولة', `ستبدأ الجلسة في ${new Date(startAt).toLocaleString()}`);
+  await broadcast(state);
+  return state;
+}
+
+async function handleScheduledStart(): Promise<void> {
+  const state = await getState();
+  if (!state.session || state.session.status !== 'SCHEDULED') return;
+  if ((state.session.scheduledStartAt ?? 0) > Date.now()) return;
+  const running = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'RUNNING', startedAt: Date.now(), scheduledStartAt: undefined, nextRunAt: undefined, updatedAt: Date.now() } : null }));
+  await chrome.alarms.clear(SCHEDULE_ALARM_NAME);
+  await notifyEvent('X-Pilot: بدأت الجلسة', 'بدأت جلسة النشر المجدولة.');
+  let ready = running;
+  if (running.workspaceId && running.session && !running.session.historicalSessionId) {
+    const historical = createHistoricalSession(running.session, running.queue);
+    await saveHistoricalSession(running.workspaceId, historical);
+    ready = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, historicalSessionId: historical.id, updatedAt: Date.now() } : null }));
+  }
+  await broadcast(ready);
+  await processCurrentItem();
+}
+
 async function handleMessage(message: RuntimeMessage): Promise<unknown> {
   switch (message.type) {
     case 'GET_STATE': return getActiveState();
@@ -517,6 +585,8 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     case 'DRY_RUN_QUEUE':
       return runDryRun('ENTIRE_QUEUE', message.workspaceId ?? (await getMeta()).activeWorkspaceId);
     case 'CREATE_WORKSPACE': return createWorkspace(message.name, message.description, message.color, message.icon);
+    case 'UPDATE_WORKSPACE_PROFILE': return updateWorkspaceProfile(message.workspaceId, message.profile);
+    case 'CLEAR_WORKSPACE_PROFILE': return clearWorkspaceProfile(message.workspaceId);
     case 'UPDATE_WORKSPACE': return updateWorkspace(message.workspaceId, message.patch);
     case 'ARCHIVE_WORKSPACE': return archiveWorkspace(message.workspaceId);
     case 'RESTORE_WORKSPACE': return restoreWorkspace(message.workspaceId);
@@ -558,12 +628,22 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       return { discarded: true };
     }
     case 'UPDATE_SETTINGS': await saveSettings(message.settings); return updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, ...message.settings, updatedAt: Date.now() } : state.session }));
+    case 'SCHEDULE': return scheduleSession(message.workspaceId ?? (await getMeta()).activeWorkspaceId, message.startAt);
+    case 'RESCHEDULE': return scheduleSession(message.workspaceId ?? (await getMeta()).activeWorkspaceId, message.startAt);
+    case 'CANCEL_SCHEDULE': {
+      await chrome.alarms.clear(SCHEDULE_ALARM_NAME);
+      const cancelled = await updateRuntimeState((current) => ({ ...current, session: current.session?.status === 'SCHEDULED' ? { ...current.session, status: 'STOPPED', scheduledStartAt: undefined, nextRunAt: undefined, updatedAt: Date.now() } : current.session }));
+      await releaseAutomationOwner(cancelled.workspaceId ?? (await getMeta()).activeWorkspaceId);
+      await notifyEvent('X-Pilot: أُلغيت الجدولة', 'تم إلغاء جلسة النشر المجدولة.');
+      await broadcast(cancelled);
+      return cancelled;
+    }
     case 'START': {
       const meta = await getMeta();
       const preflight = await performPreflight(message.workspaceId ?? meta.activeWorkspaceId);
-      if (!preflight.ready) throw new Error(`PREFLIGHT_FAILED:${preflight.summary}`);
+      if (!preflight.ready) { await notifyEvent('X-Pilot: فشل فحص الجاهزية', preflight.summary); throw new Error(`PREFLIGHT_FAILED:${preflight.summary}`); }
       await claimAutomationOwner(message.workspaceId ?? meta.activeWorkspaceId);
-      const settings = await getSettings();
+      const settings = await getWorkspaceSettings(message.workspaceId ?? meta.activeWorkspaceId);
       const state = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, ...settings, status: 'RUNNING', startedAt: current.session.startedAt ?? Date.now(), currentItemId: current.session.currentItemId ?? current.queue.find((item) => item.status === 'PENDING')?.id, updatedAt: Date.now() } : null }));
       if (state.workspaceId && state.session && !state.session.historicalSessionId) {
         const historical = createHistoricalSession(state.session, state.queue);
@@ -581,6 +661,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
         session: state.session ? { ...state.session, status: 'PAUSED', pausedAt: Date.now(), nextRunAt: state.session.status === 'WAITING' ? state.session.nextRunAt : undefined, updatedAt: Date.now() } : null
       }));
       await syncHistoricalSession(paused, 'PAUSED');
+      await notifyEvent('X-Pilot: توقفت Queue مؤقتًا', 'تم إيقاف Queue مؤقتًا.');
       await broadcast(paused);
       return paused;
     }
@@ -604,10 +685,11 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     }
     case 'STOP': {
       await chrome.alarms.clear(ALARM_NAME);
+      await chrome.alarms.clear(SCHEDULE_ALARM_NAME);
       const stopped = await updateRuntimeState((state) => ({
         ...state,
         queue: state.queue.map((item) => item.id === state.session?.currentItemId && (item.status === 'OPENING' || item.status === 'READY') ? { ...item, status: 'PENDING', operationId: undefined, updatedAt: Date.now() } : item),
-        session: state.session ? { ...state.session, status: 'STOPPED', nextRunAt: undefined, updatedAt: Date.now() } : null
+        session: state.session ? { ...state.session, status: 'STOPPED', scheduledStartAt: undefined, nextRunAt: undefined, updatedAt: Date.now() } : null
       }));
       await syncHistoricalSession(stopped, 'STOPPED');
       const result = stopped.session ? await closeAutomationTabIfConfigured(stopped.session) : stopped;
@@ -623,6 +705,6 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
 }
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => { handleMessage(message).then(sendResponse).catch((error) => sendResponse({ error: error instanceof Error ? error.message : 'UNKNOWN_ERROR' })); return true; });
-chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === ALARM_NAME) void advanceSession(); });
+chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === ALARM_NAME) void advanceSession(); if (alarm.name === SCHEDULE_ALARM_NAME) void handleScheduledStart(); });
 chrome.runtime.onStartup.addListener(() => { void recoverPersistedState(); });
 chrome.runtime.onInstalled.addListener(() => { void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); void recoverPersistedState(); });
