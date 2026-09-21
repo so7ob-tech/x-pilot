@@ -1,4 +1,12 @@
 # Changelog
+## [1.0.1] - Patch
+### Fixed
+- إزالة خيار `Active Workspace` وsentinel `@active` من واجهة Workspace Filter.
+- جعل `workspaceId` يحمل دائمًا معرف Workspace الفعلي بعد التهيئة، أو `*` عند اختيار جميع المساحات.
+- مزامنة Queue وTweet Banks وSessions وHistory فور تغيير Workspace الرئيسية.
+- جعل Clear Filters يعيد الفلتر إلى Workspace النشطة بدل All Workspaces.
+- إضافة اختبارات قبول C1–C11 لسلوك Workspace Filters.
+
 ## [1.0.0] - Stable
 ### Added
 - توحيد بيانات العرض في واجهة Side Panel حول حالة Workspace المشتركة مع مصالحة فورية لنتائج العمليات.
