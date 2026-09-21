@@ -280,6 +280,16 @@ test('startup and install listeners both invoke persisted-state recovery', () =>
   assert.match(serviceWorker, /await chrome\.alarms\.clear\(ALARM_NAME\)/);
 });
 
+test('v1.0 retains START exclusivity through lease renewal and explicit Workspace scopes', () => {
+  assert.match(storage, /export async function renewStartLock/);
+  assert.match(serviceWorker, /renewStartLock\(startToken\)/);
+  assert.match(serviceWorker, /setInterval\(\(\) =>/);
+  assert.match(uiSource, /workspaceScopeMode/);
+  assert.match(uiSource, /filters\.activeWorkspace/);
+  assert.match(fs.readFileSync(path.join(root, 'src/domain/search-filters.ts'), 'utf8'), /export type WorkspaceScopeMode/);
+  assert.match(fs.readFileSync(path.join(root, 'src/ui/state/workspace-state-store.ts'), 'utf8'), /reconcileWorkspaceState/);
+});
+
 test('successful publish persists the next item before scheduling the wait', () => {
   assert.match(serviceWorker, /const nextItem = getNextPendingItem\(\(await getState\(\)\)\.queue, item\.id\)/);
   assert.match(serviceWorker, /currentItemId: nextItem\?\.id/);

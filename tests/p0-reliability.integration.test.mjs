@@ -54,6 +54,16 @@ test('P0-2: persisted START lock allows one concurrent transition only', async (
   await releaseStartLock(token);
 });
 
+test('P0-2: a long START critical section renews its lease without changing its token', async () => {
+  installChromeStorage();
+  const { acquireStartLock, renewStartLock, releaseStartLock } = await import('../src/storage/storage-repository.ts?start-lock-renewal-test');
+  const token = await acquireStartLock('workspace-a', 1_000, 100);
+  assert.equal(await renewStartLock(token, 1_090, 100), true);
+  await assert.rejects(() => acquireStartLock('workspace-b', 1_150, 100), /START_ALREADY_IN_FLIGHT/);
+  assert.equal(await renewStartLock('wrong-token', 1_160, 100), false);
+  await releaseStartLock(token);
+});
+
 test('P0-3: alarm failure policy retries with a future trigger and then fails explicitly', () => {
   const retry = decideAlarmFailure('WAITING', 5_000, 0, 1_000);
   assert.equal(retry.action, 'RETRY');
