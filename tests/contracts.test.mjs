@@ -114,6 +114,7 @@ test('Phase 2 exposes persistent scheduling, profiles, notifications, and Badge 
   assert.match(serviceWorker, /chrome\.alarms\.create\(SCHEDULE_ALARM_NAME/);
   assert.match(serviceWorker, /getNextAllowedPublishingTime/);
   assert.match(serviceWorker, /chrome\.notifications\.create/);
+  assert.match(serviceWorker, /فشل عنصر/);
   assert.match(serviceWorker, /chrome\.action\.setBadgeText/);
   assert.match(uiSource, /Schedule/);
   assert.match(uiSource, /Reschedule/);
