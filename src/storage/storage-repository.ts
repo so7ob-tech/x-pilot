@@ -1,6 +1,10 @@
 import type { AppMetaState, AppMetadata, AppState, AutomationSession, AutomationSessionRecord, AutomationSessionRuntime, BackupEnvelope, BackupSummary, BackupValidation, GlobalSettings, HistoricalSession, LegacyPublishAttempt, PublishAttempt, QueueItem, Settings, TweetBank, Workspace, WorkspaceSettings, WorkspaceState } from '../domain/models';
+import { CURRENT_SCHEMA_VERSION, getMigrationPath, validateMigrationRegistry } from './migrations.ts';
+import { timedStorageOperation } from './storage-performance.ts';
 
 const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false, duplicatePolicy: 'BLOCK', publishingWindows: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', notificationsEnabled: true, badgeMode: 'COUNT' };
+
+validateMigrationRegistry(CURRENT_SCHEMA_VERSION);
 
 export const LEGACY_STATE_KEY = 'xQueueState';
 export const LEGACY_SETTINGS_KEY = 'xQueueSettings';
@@ -81,7 +85,7 @@ function createWorkspaceState(workspace: Workspace, settings: Settings, seed: Pa
 }
 
 async function readMeta(): Promise<AppMetaState | undefined> {
-  const result = await chrome.storage.local.get([META_KEY, V4_META_KEY, V4_GLOBAL_SETTINGS_KEY]);
+  const result = await timedStorageOperation('get', 3, () => chrome.storage.local.get([META_KEY, V4_META_KEY, V4_GLOBAL_SETTINGS_KEY]));
   if (result[V4_META_KEY]) return { ...(result[V4_META_KEY] as AppMetadata), globalSettings: result[V4_GLOBAL_SETTINGS_KEY] as Settings } as AppMetaState;
   return result[META_KEY] as AppMetaState | undefined;
 }
@@ -90,10 +94,12 @@ async function migrateIfNeeded(): Promise<AppMetaState> {
   const existing = await readMeta();
   if (existing?.schemaVersion === 4) return existing;
   if (existing?.schemaVersion === 3) {
+    getMigrationPath(3, CURRENT_SCHEMA_VERSION);
     return migrateSchema3To4(existing);
   }
 
   if (existing?.schemaVersion === 2) {
+    getMigrationPath(2, CURRENT_SCHEMA_VERSION);
     const keys = existing.workspaceOrder.map(workspaceKey);
     const stored = await chrome.storage.local.get(keys);
     const upgraded = { ...existing, schemaVersion: 3 as const };
@@ -106,6 +112,7 @@ async function migrateIfNeeded(): Promise<AppMetaState> {
     return migrateSchema3To4(upgraded);
   }
 
+  getMigrationPath(1, CURRENT_SCHEMA_VERSION);
   const legacy = await chrome.storage.local.get([LEGACY_STATE_KEY, LEGACY_SETTINGS_KEY]);
   const legacyState = legacy[LEGACY_STATE_KEY] as Partial<AppState> | undefined;
   const settings: Settings = { ...defaultSettings, ...(legacy[LEGACY_SETTINGS_KEY] as Partial<Settings> | undefined) };
@@ -135,7 +142,7 @@ export async function saveMeta(meta: AppMetaState): Promise<void> {
 export async function getWorkspaceState(workspaceId: string): Promise<WorkspaceState> {
   const meta = await migrateIfNeeded();
   if (meta.schemaVersion === 4) {
-    const result = await chrome.storage.local.get([v4WorkspaceKey(workspaceId), v4WorkspaceSettingsKey(workspaceId), v4BankKey(workspaceId), v4QueueKey(workspaceId), v4SessionsKey(workspaceId), v4AttemptsKey(workspaceId), V4_RUNTIME_KEY]);
+    const result = await timedStorageOperation('get', 7, () => chrome.storage.local.get([v4WorkspaceKey(workspaceId), v4WorkspaceSettingsKey(workspaceId), v4BankKey(workspaceId), v4QueueKey(workspaceId), v4SessionsKey(workspaceId), v4AttemptsKey(workspaceId), V4_RUNTIME_KEY]));
     const workspace = result[v4WorkspaceKey(workspaceId)] as Workspace | undefined;
     if (workspace) {
       const local = result[v4WorkspaceSettingsKey(workspaceId)] as WorkspaceSettings | undefined;
@@ -173,7 +180,7 @@ export async function saveWorkspaceState(state: WorkspaceState): Promise<void> {
   if (!current[v4WorkspaceSettingsKey(state.workspaceId)]) writes[v4WorkspaceSettingsKey(state.workspaceId)] = { workspaceId: state.workspaceId, overrides: {}, createdAt: state.workspace.createdAt, updatedAt: Date.now() } satisfies WorkspaceSettings;
   if (runtime && runtime.status !== 'IDLE') writes[V4_RUNTIME_KEY] = runtime;
   else if ((currentRuntime[V4_RUNTIME_KEY] as AutomationSessionRuntime | undefined)?.workspaceId === state.workspaceId) await chrome.storage.local.remove(V4_RUNTIME_KEY);
-  await chrome.storage.local.set(writes);
+  await timedStorageOperation('set', Object.keys(writes).length, () => chrome.storage.local.set(writes));
 }
 
 export async function updateWorkspaceState(workspaceId: string, mutator: (state: WorkspaceState) => WorkspaceState): Promise<WorkspaceState> {
