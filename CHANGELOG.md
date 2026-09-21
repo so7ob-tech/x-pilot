@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.19.6] - Patch
+
+### Fixed
+
+- `Start` now creates a complete Automation Session when the Workspace has no persisted session.
+- The first runnable Queue item is assigned as the current item, restoring the Current Tweet card and operation controls.
+- Automation-tab creation now runs inside the guarded publish flow; failures are converted to the normal retry/continue state instead of leaving an item stuck.
+- The session and Queue state are broadcast after startup so the UI controls remain synchronized.
+
 ## [0.19.5] - Patch
 
 ### Fixed

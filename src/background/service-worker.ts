@@ -368,9 +368,11 @@ async function processCurrentItem(): Promise<void> {
     ...current,
     queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: 'OPENING', attempts: candidate.attempts + 1, startedAt, operationId, updatedAt: startedAt } : candidate)
   }));
-  const tabId = await getOrCreateAutomationTab(session);
-  const previousActiveTabId = await getPreviousActiveTabId(tabId);
+  let tabId: number | undefined;
+  let previousActiveTabId: number | undefined;
   try {
+    tabId = await getOrCreateAutomationTab(session);
+    previousActiveTabId = await getPreviousActiveTabId(tabId);
     await chrome.tabs.update(tabId, { url: item.targetUrl, active: false });
     await waitForTabLoad(tabId);
     await activateAutomationTab(tabId);
@@ -794,11 +796,22 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     }
     case 'START': {
       const meta = await getMeta();
-      const preflight = await performPreflight(message.workspaceId ?? meta.activeWorkspaceId);
+      const workspaceId = message.workspaceId ?? meta.activeWorkspaceId;
+      const preflight = await performPreflight(workspaceId);
       if (!preflight.ready) { await notifyEvent('X-Pilot: فشل فحص الجاهزية', preflight.summary); throw new Error(`PREFLIGHT_FAILED:${preflight.summary}`); }
-      await claimAutomationOwner(message.workspaceId ?? meta.activeWorkspaceId);
-      const settings = await getWorkspaceSettings(message.workspaceId ?? meta.activeWorkspaceId);
-      const state = await updateRuntimeState((current) => ({ ...current, session: current.session ? { ...current.session, ...settings, status: 'RUNNING', startedAt: current.session.startedAt ?? Date.now(), currentItemId: current.session.currentItemId ?? current.queue.find((item) => item.status === 'PENDING')?.id, updatedAt: Date.now() } : null }));
+      await claimAutomationOwner(workspaceId);
+      const settings = await getWorkspaceSettings(workspaceId);
+      const state = await updateRuntimeState((current) => {
+        const firstItem = current.queue.find((item) => canStartItem(item.status) && !item.duplicateStatus?.includes('PUBLISHED'));
+        const currentItem = current.session?.currentItemId && current.queue.some((item) => item.id === current.session?.currentItemId && canStartItem(item.status))
+          ? current.session.currentItemId
+          : firstItem?.id;
+        const session: AutomationSession = current.session ?? {
+          id: crypto.randomUUID(), workspaceId, bankUrl: '', ...settings,
+          status: 'RUNNING' as const, currentIndex: firstItem?.position ?? 0, total: current.queue.length, version: 1, updatedAt: Date.now(),
+        };
+        return { ...current, session: { ...session, ...settings, workspaceId, status: 'RUNNING', startedAt: session.startedAt ?? Date.now(), currentItemId: currentItem, currentIndex: current.queue.find((item) => item.id === currentItem)?.position ?? session.currentIndex, total: current.queue.length, updatedAt: Date.now() } };
+      });
       if (state.workspaceId && state.session && !state.session.historicalSessionId) {
         const historical = createHistoricalSession(state.session, state.queue);
         await saveHistoricalSession(state.workspaceId, historical);
