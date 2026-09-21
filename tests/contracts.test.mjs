@@ -50,7 +50,7 @@ test('UI and README use the official X-Pilot branding asset', () => {
 
 test('Side Panel exposes operation, tweet-bank, and settings tabs', () => {
   assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'settings'/);
-  assert.match(uiSource, /aria-label="تبويبات X-Pilot"/);
+  assert.match(uiSource, /aria-label="حالة X-Pilot والتبويبات"/);
   assert.match(uiSource, /label="التشغيل"/);
   assert.match(uiSource, /label="بنك التغريدات"/);
   assert.match(uiSource, /label="الإعدادات"/);
@@ -66,6 +66,25 @@ test('operation tab includes current-tweet information and existing controls', (
   assert.match(uiSource, /type: 'PAUSE'/);
   assert.match(uiSource, /type: 'RESUME'/);
   assert.match(uiSource, /type: 'STOP'/);
+});
+
+test('Service Worker exposes live engine and automation-tab connectivity status', () => {
+  assert.match(serviceWorker, /async function getRuntimeStatus\(\): Promise<RuntimeStatus>/);
+  assert.match(serviceWorker, /case 'GET_RUNTIME_STATUS': return getRuntimeStatus\(\)/);
+  assert.match(serviceWorker, /connection: 'NOT_REQUIRED'/);
+  assert.match(serviceWorker, /connection: 'CONNECTED'/);
+  assert.match(serviceWorker, /connection: 'DISCONNECTED'/);
+  assert.match(serviceWorker, /await chrome\.tabs\.get\(session\.automationTabId\)/);
+});
+
+test('tab bar renders accessible live connection and engine indicators', () => {
+  assert.match(uiSource, /GET_RUNTIME_STATUS/);
+  assert.match(uiSource, /window\.setInterval\(\(\) => void refreshRuntimeStatus\(\), 1500\)/);
+  assert.match(uiSource, /function StatusIndicator/);
+  assert.match(uiSource, /connectionLabel\(runtimeStatus\.connection\)/);
+  assert.match(uiSource, /engineLabel\(runtimeStatus\.engineStatus\)/);
+  assert.match(uiSource, /aria-live="polite"/);
+  assert.match(uiSource, /runtime-warning/);
 });
 
 test('failed Continue path schedules the next item and its countdown alarm', () => {

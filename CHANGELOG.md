@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1] - Unreleased
+
+### Added
+
+- Adds live connection and engine-activity indicators to the tab bar.
+- Detects manually closed automation tabs and reports a disconnected state.
+- Adds an accessible warning when the engine is active without a connected automation tab.
+
 ## [0.4.0] - Unreleased
 
 ### Added

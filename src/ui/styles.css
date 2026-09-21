@@ -25,10 +25,20 @@ button.primary { color: white; border-color: #1c65d1; background: #1c65d1; }
 button.danger { color: #a42020; }
 .notice { padding: 10px 12px; border-radius: 10px; color: #214a75; background: #e6f1ff; margin-bottom: 14px; }
 .muted, footer { color: #6b7b91; font-size: 12px; line-height: 1.6; }
-.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 5px; margin: 0 0 14px; background: #e8eef7; border-radius: 13px; }
+.tabs-bar { display: grid; gap: 8px; margin: 0 0 14px; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 5px; background: #e8eef7; border-radius: 13px; }
 .tab-button { border: 0; background: transparent; color: #5f7087; padding: 10px 8px; font-size: 12px; font-weight: 800; }
 .tab-button span { margin-left: 5px; }
 .tab-button.active { color: #145dcc; background: #fff; box-shadow: 0 2px 9px #193a5b18; }
+.runtime-indicators { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 7px; padding: 0 2px; }
+.live-indicator { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #dce4ef; border-radius: 999px; padding: 4px 8px; color: #53667e; background: #fff; font-size: 10px; font-weight: 800; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; box-shadow: 0 0 0 2px #94a3b822; }
+.connection-CONNECTED .live-dot, .engine-RUNNING .live-dot { background: #16a05d; box-shadow: 0 0 0 2px #16a05d22; }
+.connection-DISCONNECTED .live-dot, .engine-FAILED .live-dot { background: #d13b3b; box-shadow: 0 0 0 2px #d13b3b22; }
+.engine-WAITING .live-dot, .engine-PAUSED .live-dot { background: #d59b20; box-shadow: 0 0 0 2px #d59b2022; }
+.engine-RUNNING .live-dot { animation: pulse-live 1.4s ease-in-out infinite; }
+.runtime-warning { margin: -4px 0 14px; padding: 9px 11px; border: 1px solid #f1d6a1; border-radius: 10px; color: #745100; background: #fff7df; font-size: 12px; }
+@keyframes pulse-live { 50% { opacity: .35; transform: scale(.78); } }
 .tab-panel { min-height: 220px; }
 .session-progress { color: #6b7b91; font-size: 11px; white-space: nowrap; }
 .stats { margin-bottom: 0; }
