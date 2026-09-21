@@ -38,6 +38,11 @@ export const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, fa
 export type AutomationConnection = 'CONNECTED' | 'DISCONNECTED' | 'NOT_REQUIRED';
 export interface RuntimeStatus { engineStatus: SessionStatus; connection: AutomationConnection; automationTabId?: number; automationWorkspaceId?: string; checkedAt: number; }
 export interface PreflightResult { ready: boolean; checkedAt: number; workspaceId: string; summary: string; checks: Array<{ id: string; status: 'PASS' | 'WARN' | 'FAIL'; message: string; details?: string; blocking: boolean }>; counts: { total: number; ready: number; published: number; failed: number; skipped: number; duplicates: number; publishedDuplicates: number; invalid: number }; }
+export type DryRunItemStatus = 'READY' | 'LOGIN_REQUIRED' | 'CONTENT_MISSING' | 'POST_BUTTON_NOT_FOUND' | 'INVALID_URL' | 'CHALLENGE_DETECTED' | 'ERROR';
+export type DryRunMode = 'FIRST_ITEM' | 'ENTIRE_QUEUE';
+export type DryRunSessionStatus = 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'FAILED';
+export interface DryRunItemResult { queueItemId: string; targetUrl: string; status: DryRunItemStatus; checkedAt: number; durationMs: number; pageKind: ContentInspection['pageKind']; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string; error?: string; }
+export interface DryRunResult { id: string; workspaceId?: string; mode: DryRunMode; status: DryRunSessionStatus; startedAt: number; completedAt?: number; currentItemId?: string; total: number; checked: number; ready: number; failed: number; items: DryRunItemResult[]; }
 export type RuntimeMessage =
   | { type: 'GET_STATE' } | { type: 'GET_WORKSPACES' } | { type: 'GET_WORKSPACE_STATE'; workspaceId?: string } | { type: 'GET_SESSION_HISTORY'; workspaceId?: string } | { type: 'PREFLIGHT_CHECK'; workspaceId?: string }
   | { type: 'CREATE_WORKSPACE'; name: string; description?: string; color?: string; icon?: string }
@@ -47,7 +52,7 @@ export type RuntimeMessage =
   | { type: 'CREATE_BANK'; workspaceId?: string; name: string; url: string; description?: string } | { type: 'UPDATE_BANK'; workspaceId?: string; bankId: string; patch: Partial<Pick<TweetBank, 'name' | 'description' | 'url' | 'favorite'>> }
   | { type: 'ARCHIVE_BANK'; workspaceId?: string; bankId: string } | { type: 'RESTORE_BANK'; workspaceId?: string; bankId: string } | { type: 'DELETE_BANK'; workspaceId?: string; bankId: string; confirmed: boolean }
   | { type: 'EXTRACT_BANK'; bankId?: string; bankUrl: string; workspaceId?: string; mode?: 'REPLACE' | 'APPEND' } | { type: 'REFRESH_BANK'; workspaceId?: string; bankId: string } | { type: 'GET_BANK_DIFF'; workspaceId?: string; bankId: string } | { type: 'ADD_DIFF_ITEMS'; workspaceId?: string; bankId: string; itemIds: string[] } | { type: 'DISCARD_BANK_DIFF'; workspaceId?: string; bankId: string }
-  | { type: 'START'; confirmed?: boolean; workspaceId?: string } | { type: 'PAUSE'; workspaceId?: string } | { type: 'RESUME'; workspaceId?: string } | { type: 'STOP'; workspaceId?: string }
+  | { type: 'START'; confirmed?: boolean; workspaceId?: string } | { type: 'PAUSE'; workspaceId?: string } | { type: 'RESUME'; workspaceId?: string } | { type: 'STOP'; workspaceId?: string } | { type: 'DRY_RUN_FIRST'; workspaceId?: string } | { type: 'DRY_RUN_QUEUE'; workspaceId?: string } | { type: 'DRY_RUN_STOP' } | { type: 'GET_DRY_RUN' }
   | { type: 'SKIP_CURRENT' } | { type: 'RETRY_ITEM'; itemId: string } | { type: 'REORDER'; itemId: string; direction: 'up' | 'down' } | { type: 'DELETE_ITEM'; itemId: string } | { type: 'CLEAR_COMPLETED' } | { type: 'UPDATE_SETTINGS'; settings: Settings; workspaceId?: string };
 export type ContentMessage = { type: 'X_INSPECT' } | { type: 'X_PUBLISH' };
 export interface ContentInspection { ok: boolean; pageKind: 'X' | 'LOGIN' | 'CHALLENGE' | 'ERROR' | 'UNKNOWN'; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string; }
