@@ -50,7 +50,7 @@ export type DryRunItemStatus = 'READY' | 'LOGIN_REQUIRED' | 'CONTENT_MISSING' | 
 export type DryRunMode = 'FIRST_ITEM' | 'ENTIRE_QUEUE';
 export type DryRunSessionStatus = 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'FAILED';
 export interface DryRunItemResult { queueItemId: string; position: number; targetUrl: string; status: DryRunItemStatus; checkedAt: number; durationMs: number; pageKind: ContentInspection['pageKind']; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string; error?: string; }
-export interface DryRunResult { id: string; workspaceId?: string; mode: DryRunMode; status: DryRunSessionStatus; startedAt: number; completedAt?: number; currentItemId?: string; total: number; checked: number; ready: number; failed: number; items: DryRunItemResult[]; }
+export interface DryRunResult { id: string; workspaceId?: string; mode: DryRunMode; status: DryRunSessionStatus; startedAt: number; completedAt?: number; currentItemId?: string; total: number; checked: number; ready: number; failed: number; items: DryRunItemResult[]; error?: string; }
 export interface BackupEnvelope { format: 'x-pilot-backup'; formatVersion: 1 | 2; appVersion: string; createdAt: number; meta: AppMetaState; globalSettings?: Settings; workspaceSettings?: WorkspaceSettings[]; workspaces: WorkspaceState[]; sessionRecords?: AutomationSessionRecord[]; attempts?: PublishAttempt[]; }
 export interface BackupSummary { workspaceCount: number; bankCount: number; queueCount: number; historyCount: number; historicalSessionCount: number; createdAt: number; }
 export interface BackupValidation { valid: boolean; summary?: BackupSummary; errors: string[]; }

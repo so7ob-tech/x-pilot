@@ -19,6 +19,8 @@ test('Dry Run uses one sequential automation tab and restores the previous tab',
   assert.match(worker, /for \(const item of selected\)/);
   assert.match(worker, /await getOrCreateAutomationTab\(state\.session\)/);
   assert.match(worker, /finally \{\s*await restoreActiveTab\(previousActiveTabId\);/);
+  assert.match(worker, /DRY_RUN_TAB_CREATE_FAILED/);
+  assert.match(worker, /temporaryTab/);
 });
 
 test('Dry Run has a hard no-publish boundary', () => {
@@ -35,4 +37,5 @@ test('UI exposes both Dry Run modes and stop control', () => {
   assert.match(ui, /DRY_RUN_STOP/);
   assert.match(ui, /Test First Item/);
   assert.match(ui, /Test Entire Queue/);
+  assert.match(ui, /تعذر بدء Dry Run/);
 });
