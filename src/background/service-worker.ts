@@ -1,4 +1,4 @@
-import type { AppState, AutomationSession, ContentInspection, QueueItem, RuntimeMessage, Settings } from '../domain/models';
+import type { AppState, AutomationSession, ContentInspection, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
 import { defaultSettings } from '../domain/models';
 import { hasFutureRecoveryAlarm, normalizeRecovery } from '../domain/recovery';
 import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem } from '../domain/state-machine';
@@ -29,6 +29,21 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 async function broadcast(state?: AppState) {
   const snapshot = state ?? await getState();
   await chrome.runtime.sendMessage({ type: 'STATE_UPDATED', state: snapshot }).catch(() => undefined);
+}
+
+async function getRuntimeStatus(): Promise<RuntimeStatus> {
+  const state = await getState();
+  const session = state.session;
+  const activeEngine = session?.status === 'RUNNING' || session?.status === 'WAITING' || session?.status === 'PAUSED';
+  if (!activeEngine || !session?.automationTabId) {
+    return { engineStatus: session?.status ?? 'IDLE', connection: 'NOT_REQUIRED', checkedAt: Date.now() };
+  }
+  try {
+    await chrome.tabs.get(session.automationTabId);
+    return { engineStatus: session.status, connection: 'CONNECTED', automationTabId: session.automationTabId, checkedAt: Date.now() };
+  } catch {
+    return { engineStatus: session.status, connection: 'DISCONNECTED', automationTabId: session.automationTabId, checkedAt: Date.now() };
+  }
 }
 
 async function recoverPersistedState(): Promise<AppState> {
@@ -272,6 +287,7 @@ async function extractBank(bankUrl: string): Promise<AppState> {
 async function handleMessage(message: RuntimeMessage): Promise<unknown> {
   switch (message.type) {
     case 'GET_STATE': return getState();
+    case 'GET_RUNTIME_STATUS': return getRuntimeStatus();
     case 'EXTRACT_BANK': return extractBank(message.bankUrl);
     case 'UPDATE_SETTINGS': await saveSettings(message.settings); return updateState((state) => ({ ...state, session: state.session ? { ...state.session, ...message.settings, updatedAt: Date.now() } : state.session }));
     case 'START': {

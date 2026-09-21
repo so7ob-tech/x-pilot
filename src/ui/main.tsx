@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { AppState, QueueItem, RuntimeMessage, Settings } from '../domain/models';
+import type { AppState, QueueItem, RuntimeMessage, RuntimeStatus, Settings } from '../domain/models';
 import { defaultSettings } from '../domain/models';
 import { getTweetPreview } from '../extraction/tweet-preview';
 import './styles.css';
 
 const initialState: AppState = { queue: [], session: null, history: [] };
+const initialRuntimeStatus: RuntimeStatus = { engineStatus: 'IDLE', connection: 'NOT_REQUIRED', checkedAt: 0 };
 type TabId = 'operation' | 'queue' | 'settings';
 
 function send(message: RuntimeMessage): Promise<any> { return chrome.runtime.sendMessage(message); }
@@ -17,6 +18,7 @@ function App() {
   const [notice, setNotice] = useState('');
   const [nowMs, setNowMs] = useState(Date.now());
   const [activeTab, setActiveTab] = useState<TabId>('operation');
+  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus>(initialRuntimeStatus);
   const session = state.session;
   const published = useMemo(() => state.queue.filter((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED').length, [state.queue]);
   const failed = useMemo(() => state.queue.filter((item) => item.status === 'FAILED').length, [state.queue]);
@@ -28,7 +30,9 @@ function App() {
   const logoUrl = chrome.runtime.getURL('branding/x-pilot-logo.png');
 
   const refresh = async () => { const next = await send({ type: 'GET_STATE' }); if (next && !next.error) setState(next); };
-  useEffect(() => { void refresh(); const listener = (message: any) => { if (message.type === 'STATE_UPDATED') setState(message.state); }; chrome.runtime.onMessage.addListener(listener); return () => chrome.runtime.onMessage.removeListener(listener); }, []);
+  const refreshRuntimeStatus = async () => { const next = await send({ type: 'GET_RUNTIME_STATUS' }); if (next && !next.error) setRuntimeStatus(next); };
+  useEffect(() => { void refresh(); void refreshRuntimeStatus(); const listener = (message: any) => { if (message.type === 'STATE_UPDATED') { setState(message.state); void refreshRuntimeStatus(); } }; chrome.runtime.onMessage.addListener(listener); return () => chrome.runtime.onMessage.removeListener(listener); }, []);
+  useEffect(() => { const timer = window.setInterval(() => void refreshRuntimeStatus(), 1500); return () => window.clearInterval(timer); }, []);
   useEffect(() => { const timer = window.setInterval(() => setNowMs(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const act = async (message: RuntimeMessage, success?: string) => { const result = await send(message); if (result?.error) setNotice(result.error); else { if (result?.queue) setState(result); else await refresh(); if (success) setNotice(success); } };
   const extract = async () => {
@@ -49,11 +53,12 @@ function App() {
 
   return <main className="shell">
     <header className="brand-header"><div className="brand-lockup"><img className="brand-logo" src={logoUrl} alt="X-Pilot" /><div><span className="eyebrow">LOCAL-FIRST · MV3</span><h1>قائمة نشر X</h1></div></div><span className={`status status-${session?.status ?? 'IDLE'}`}>{session?.status ?? 'IDLE'}</span></header>
-    <nav className="tabs" aria-label="تبويبات X-Pilot" role="tablist">
+    <nav className="tabs-bar" aria-label="حالة X-Pilot والتبويبات"><div className="tabs" role="tablist">
       <TabButton id="operation" activeTab={activeTab} onSelect={setActiveTab} icon="▶" label="التشغيل" />
       <TabButton id="queue" activeTab={activeTab} onSelect={setActiveTab} icon="☷" label="بنك التغريدات" />
       <TabButton id="settings" activeTab={activeTab} onSelect={setActiveTab} icon="⚙" label="الإعدادات" />
-    </nav>
+    </div><div className="runtime-indicators" aria-live="polite"><StatusIndicator kind="connection" value={runtimeStatus.connection} label={connectionLabel(runtimeStatus.connection)} /><StatusIndicator kind="engine" value={runtimeStatus.engineStatus} label={engineLabel(runtimeStatus.engineStatus)} /></div></nav>
+    {runtimeStatus.connection === 'DISCONNECTED' && <div className="runtime-warning" role="status">تبويب الأتمتة غير متصل — قد يتعذر تنفيذ التغريدة الحالية.</div>}
     {notice && <div className="notice">{notice}</div>}
 
     {activeTab === 'operation' && <section className="tab-panel" role="tabpanel" aria-label="التشغيل">
@@ -76,6 +81,10 @@ function App() {
 }
 
 function TabButton({ id, activeTab, onSelect, icon, label }: { id: TabId; activeTab: TabId; onSelect: (id: TabId) => void; icon: string; label: string }) { return <button className={`tab-button ${activeTab === id ? 'active' : ''}`} role="tab" aria-selected={activeTab === id} onClick={() => onSelect(id)}><span aria-hidden="true">{icon}</span>{label}</button>; }
+
+function StatusIndicator({ kind, value, label }: { kind: 'connection' | 'engine'; value: string; label: string }) { return <span className={`live-indicator ${kind}-indicator ${kind}-${value}`}><span className="live-dot" aria-hidden="true" />{label}</span>; }
+function connectionLabel(value: RuntimeStatus['connection']): string { return value === 'CONNECTED' ? 'متصل' : value === 'DISCONNECTED' ? 'غير متصل' : 'غير مطلوب'; }
+function engineLabel(value: RuntimeStatus['engineStatus']): string { const labels: Record<RuntimeStatus['engineStatus'], string> = { IDLE: 'خامل', RUNNING: 'يعمل الآن', WAITING: 'في الانتظار', PAUSED: 'متوقف مؤقتًا', STOPPED: 'متوقف', COMPLETED: 'مكتمل', FAILED: 'فشل' }; return labels[value]; }
 
 function CurrentTweetCard({ item, position, logoUrl }: { item?: QueueItem; position?: number; logoUrl: string }) { return <section className="card current-card"><div className="current-heading"><div className="current-brand"><img src={logoUrl} alt="" /><div><span className="eyebrow">CURRENT TWEET</span><h2>التغريدة الحالية</h2></div></div>{item && <span className={`item-status status-${item.status}`}>{item.status}</span>}</div>{item ? <><p className="current-preview" dir="auto">{getTweetPreview(item.targetUrl, item.label, 180)}</p><div className="current-meta"><span>العنصر {position ?? item.position}</span><span>المحاولات {item.attempts}</span>{item.startedAt && <span>بدأت {new Date(item.startedAt).toLocaleTimeString('ar')}</span>}</div>{item.lastError && <p className="error-text">آخر خطأ: {item.lastError}</p>}<a className="primary-link" href={item.targetUrl} target="_blank" rel="noreferrer">فتح رابط التغريدة</a></> : <p className="muted">لا توجد تغريدة قيد التشغيل حاليًا. ابدأ Queue من تبويب التشغيل.</p>}</section>; }
 

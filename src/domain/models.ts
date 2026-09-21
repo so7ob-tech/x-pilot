@@ -57,6 +57,15 @@ export interface AppState {
   history: PublishAttempt[];
 }
 
+export type AutomationConnection = 'CONNECTED' | 'DISCONNECTED' | 'NOT_REQUIRED';
+
+export interface RuntimeStatus {
+  engineStatus: SessionStatus;
+  connection: AutomationConnection;
+  automationTabId?: number;
+  checkedAt: number;
+}
+
 export interface Settings {
   intervalMinutes: number;
   maxRetries: number;
@@ -77,6 +86,7 @@ export const defaultSettings: Settings = {
 
 export type RuntimeMessage =
   | { type: 'GET_STATE' }
+  | { type: 'GET_RUNTIME_STATUS' }
   | { type: 'EXTRACT_BANK'; bankUrl: string }
   | { type: 'START'; confirmed?: boolean }
   | { type: 'PAUSE' }
