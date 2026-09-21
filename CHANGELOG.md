@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.13.2] - Patch
+
+### Fixed
+
+- Added the missing generic Failed item Chrome Notification while keeping per-success notifications disabled.
+
 ## [0.13.1] - Patch
 
 ### Fixed

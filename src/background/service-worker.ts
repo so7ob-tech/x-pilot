@@ -366,6 +366,7 @@ async function processCurrentItem(): Promise<void> {
       ? await closeAutomationTabIfConfigured(failedState.session)
       : failedState;
     if (nextStatus === 'COMPLETED' && failedState.workspaceId) await releaseAutomationOwner(failedState.workspaceId);
+    if (failedStatus === 'FAILED') await notifyEvent('X-Pilot: فشل عنصر', `فشل Item #${item.position}: ${message}`);
     await broadcast(visibleState);
   }
 }
