@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.0] - Unreleased
+
+### Added
+
+- Adds non-destructive Tweet Bank Refresh and Diff.
+- Classifies refreshed links as New, Existing, Previously Published, Removed, or Invalid.
+- Adds a review panel with selectable New items before Queue insertion.
+- Prevents published items from being re-added automatically.
+- Persists the latest Bank snapshot for future comparisons.
+
 ## [0.7.0] - Unreleased
 
 ### Added

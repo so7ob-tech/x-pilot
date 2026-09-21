@@ -30,7 +30,7 @@ A later hardening phase should encode Workspace and Session identities directly 
 
 ## Workspace operations
 
-The Workspaces tab provides a compact switcher and cards for opening, creating, archiving, and deleting Workspaces. The Queue tab provides Bank cards for creating, selecting, extracting, archiving, restoring, and deleting Tweet Banks. Archiving preserves all data and removes the Workspace or Bank from the default active selector. Deletion requires explicit confirmation, cannot delete the last Workspace, and cannot delete a running Workspace or Bank.
+The Workspaces tab provides a compact switcher and cards for opening, creating, archiving, and deleting Workspaces. The Queue tab provides Bank cards for creating, selecting, extracting, refreshing, archiving, restoring, and deleting Tweet Banks. Refresh stores a lightweight snapshot and presents a non-destructive Diff review. New items can be selected explicitly before they are merged into Queue; existing, previously published, removed, and invalid items are informational and are not added automatically. Archiving preserves all data and removes the Workspace or Bank from the default active selector. Deletion requires explicit confirmation, cannot delete the last Workspace, and cannot delete a running Workspace or Bank.
 
 ## Privacy and permissions
 

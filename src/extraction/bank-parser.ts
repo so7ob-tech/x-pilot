@@ -5,6 +5,7 @@ export interface ExtractedLink {
 
 export interface ExtractionResult {
   links: ExtractedLink[];
+  invalidLinks: ExtractedLink[];
   duplicateCount: number;
   invalidCount: number;
 }
@@ -43,6 +44,7 @@ export function normalizeTargetUrl(raw: string): string | null {
 
 export function extractLinksFromValues(values: Array<{ raw: string; label?: string }>): ExtractionResult {
   const links: ExtractedLink[] = [];
+  const invalidLinks: ExtractedLink[] = [];
   const seen = new Set<string>();
   let duplicateCount = 0;
   let invalidCount = 0;
@@ -54,6 +56,7 @@ export function extractLinksFromValues(values: Array<{ raw: string; label?: stri
       const normalized = normalizeTargetUrl(candidate);
       if (!normalized) {
         invalidCount += 1;
+        invalidLinks.push({ url: candidate, label: value.label });
         continue;
       }
       if (seen.has(normalized)) {
@@ -64,7 +67,7 @@ export function extractLinksFromValues(values: Array<{ raw: string; label?: stri
       links.push({ url: normalized, label: value.label });
     }
   }
-  return { links, duplicateCount, invalidCount };
+  return { links, invalidLinks, duplicateCount, invalidCount };
 }
 
 export function extractLinksFromMarkup(markup: string): ExtractionResult {

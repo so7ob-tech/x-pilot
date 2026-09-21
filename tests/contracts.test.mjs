@@ -227,3 +227,16 @@ test('Multiple Tweet Banks remain explicit and Workspace-scoped', () => {
   assert.match(uiSource, /className=\{`bank-card/);
   assert.match(uiSource, /إضافة بنك/);
 });
+
+test('Refresh Diff is non-destructive and supports selective Queue merge', () => {
+  assert.match(models, /BankDiffResult/);
+  assert.match(models, /REFRESH_BANK/);
+  assert.match(models, /ADD_DIFF_ITEMS/);
+  assert.match(models, /DISCARD_BANK_DIFF/);
+  assert.match(serviceWorker, /async function refreshBank\(workspaceId: string, bankId: string\)/);
+  assert.match(serviceWorker, /classifyBankDiff\(workspaceId, bank, snapshot, state.queue\)/);
+  assert.match(serviceWorker, /mergeSelectedDiffItems\(workspaceState.queue, diff, bank, message.itemIds\)/);
+  assert.match(uiSource, /Refresh & Diff/);
+  assert.match(uiSource, /إضافة المحدد إلى Queue/);
+  assert.match(uiSource, /مراجعة تغييرات البنك/);
+});
