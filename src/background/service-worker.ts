@@ -17,6 +17,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   injectedContentTabs.delete(tabId);
   contentInjectionInFlight.delete(tabId);
+  void getState().then((state) => {
+    if (state.session?.automationTabId !== tabId) return;
+    void chrome.storage.local.remove(AUTOMATION_TAB_KEY);
+    void updateState((current) => current.session?.automationTabId === tabId
+      ? { ...current, session: { ...current.session, automationTabId: undefined, updatedAt: Date.now() } }
+      : current);
+  }).catch(() => undefined);
 });
 
 async function broadcast(state?: AppState) {
@@ -77,6 +84,17 @@ async function activateAutomationTab(tabId: number): Promise<void> {
 
 async function restoreActiveTab(tabId: number | undefined): Promise<void> {
   if (tabId) await chrome.tabs.update(tabId, { active: true }).catch(() => undefined);
+}
+
+async function closeAutomationTabIfConfigured(session: AutomationSession): Promise<AppState> {
+  const tabId = session.automationTabId;
+  const shouldClose = Boolean(tabId && (session.closeTabOnComplete || !session.keepAutomationTabOpen));
+  if (!tabId || !shouldClose) return getState();
+  await chrome.tabs.remove(tabId).catch(() => undefined);
+  await chrome.storage.local.remove(AUTOMATION_TAB_KEY);
+  return updateState((state) => state.session?.automationTabId === tabId
+    ? { ...state, session: { ...state.session, automationTabId: undefined, updatedAt: Date.now() } }
+    : state);
 }
 
 async function ensureContentScript(tabId: number): Promise<void> {
@@ -164,7 +182,10 @@ async function processCurrentItem(): Promise<void> {
     await chrome.alarms.clear(ALARM_NAME);
     if (nextRunAt) await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
     await restoreActiveTab(previousActiveTabId);
-    await broadcast(nextState);
+    const visibleState = nextStatus === 'COMPLETED' && nextState.session
+      ? await closeAutomationTabIfConfigured(nextState.session)
+      : nextState;
+    await broadcast(visibleState);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'UNKNOWN_ERROR';
     if (message === 'AUTOMATION_INTERRUPTED') {
@@ -178,6 +199,10 @@ async function processCurrentItem(): Promise<void> {
     }
     const current = await getState();
     const latestItem = current.queue.find((candidate) => candidate.id === item.id);
+    if (current.session?.status !== 'RUNNING' || latestItem?.operationId !== operationId) {
+      await restoreActiveTab(previousActiveTabId);
+      return;
+    }
     const exhausted = !latestItem || latestItem.attempts >= session.maxRetries + 1;
     const failedStatus = exhausted ? 'FAILED' : 'PENDING';
     const nextItem = exhausted && session.failureBehavior === 'CONTINUE' ? getNextPendingItem(current.queue, item.id) : undefined;
@@ -194,7 +219,10 @@ async function processCurrentItem(): Promise<void> {
     await chrome.alarms.clear(ALARM_NAME);
     if (nextRunAt) await chrome.alarms.create(ALARM_NAME, { when: nextRunAt, persistAcrossSessions: true });
     await restoreActiveTab(previousActiveTabId);
-    await broadcast(failedState);
+    const visibleState = nextStatus === 'COMPLETED' && failedState.session
+      ? await closeAutomationTabIfConfigured(failedState.session)
+      : failedState;
+    await broadcast(visibleState);
   }
 }
 
@@ -204,7 +232,8 @@ async function advanceSession(): Promise<void> {
   const next = getNextRunnableItem(state.queue, state.session.currentItemId);
   if (!next) {
     const completed = await updateState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'COMPLETED', completedAt: Date.now(), nextRunAt: undefined, updatedAt: Date.now() } : null }));
-    await broadcast(completed);
+    const visibleState = completed.session ? await closeAutomationTabIfConfigured(completed.session) : completed;
+    await broadcast(visibleState);
     return;
   }
   const running = await updateState((current) => ({ ...current, session: current.session ? { ...current.session, status: 'RUNNING', currentItemId: next.id, currentIndex: next.position, nextRunAt: undefined, updatedAt: Date.now() } : null }));
@@ -278,7 +307,15 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       if (next) await processCurrentItem();
       return running;
     }
-    case 'STOP': await chrome.alarms.clear(ALARM_NAME); return updateState((state) => ({ ...state, session: state.session ? { ...state.session, status: 'STOPPED', nextRunAt: undefined, updatedAt: Date.now() } : null }));
+    case 'STOP': {
+      await chrome.alarms.clear(ALARM_NAME);
+      const stopped = await updateState((state) => ({
+        ...state,
+        queue: state.queue.map((item) => item.id === state.session?.currentItemId && (item.status === 'OPENING' || item.status === 'READY') ? { ...item, status: 'PENDING', operationId: undefined, updatedAt: Date.now() } : item),
+        session: state.session ? { ...state.session, status: 'STOPPED', nextRunAt: undefined, updatedAt: Date.now() } : null
+      }));
+      return stopped.session ? closeAutomationTabIfConfigured(stopped.session) : stopped;
+    }
     case 'SKIP_CURRENT': return updateState((state) => ({ ...state, queue: state.queue.map((item) => item.id === state.session?.currentItemId ? { ...item, status: 'SKIPPED', updatedAt: Date.now() } : item) }));
     case 'RETRY_ITEM': return updateState((state) => ({ ...state, queue: state.queue.map((item) => item.id === message.itemId ? { ...item, status: 'PENDING', attempts: 0, lastError: undefined, updatedAt: Date.now() } : item) }));
     case 'DELETE_ITEM': return updateState((state) => ({ ...state, queue: state.queue.filter((item) => item.id !== message.itemId).map((item, index) => ({ ...item, position: index + 1 })) }));

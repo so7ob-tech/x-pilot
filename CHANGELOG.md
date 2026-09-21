@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.6] - Unreleased
+
+### Fixed
+
+- Applies automation-tab retention settings on Stop, completion, and final failure.
+- Clears stale `automationTabId` state when the automation tab is manually removed.
+- Prevents late automation errors from overwriting sessions already paused or stopped.
+- Keeps the automation tab available during WAITING and PAUSED states when configured.
+
 ## [0.3.5] - Unreleased
 
 ### Fixed
