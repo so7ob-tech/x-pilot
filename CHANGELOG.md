@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.1] - Patch
+
+### Fixed
+
+- Dry Run results now show only the Queue item number, status, and first ten words; raw target URLs are no longer rendered.
+- Scheduled Sessions now create a runnable session when Queue had no prior session and report a clear failure when no item is runnable at Alarm time.
+- Scheduled Alarm handling now reschedules early alarms and persists observable failure state instead of silently returning.
+
 ## [0.13.0] - Unreleased
 
 ### Added
