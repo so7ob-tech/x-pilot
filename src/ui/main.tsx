@@ -7,6 +7,7 @@ import { emptySearchFilters, filterBanks, filterHistory, filterQueue, filterSess
 import { calculateGlobalAnalytics, calculateWorkspaceAnalytics } from '../domain/analytics';
 import { Icon, StatusBadge, type IconName } from './components';
 import { sendRuntime as send } from './services/runtime-client';
+import { getUserFacingMessage } from './services/error-messages';
 import { OperationTab } from './tabs/OperationTab';
 import { AnalyticsTab } from './tabs/AnalyticsTab';
 import { DiagnosticsTab } from './tabs/DiagnosticsTab';
@@ -50,7 +51,7 @@ function App() {
   const [analyticsWorkspaceId, setAnalyticsWorkspaceId] = useState('*');
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null);
   const [scheduleAt, setScheduleAt] = useState('');
-  const setNotice = (message: string) => { setNoticeState(message); setNoticeKind(isErrorNotice(message) ? 'error' : 'info'); };
+  const setNotice = (message: string) => { const visibleMessage = getUserFacingMessage(message); setNoticeState(visibleMessage); setNoticeKind(isErrorNotice(message) ? 'error' : 'info'); };
   const session = state.session;
   const published = useMemo(() => state.queue.filter((item) => item.status === 'PUBLISHED' || item.status === 'PUBLISHED_UNVERIFIED').length, [state.queue]);
   const failed = useMemo(() => state.queue.filter((item) => item.status === 'FAILED').length, [state.queue]);
@@ -190,7 +191,7 @@ function App() {
 
     {activeTab === 'history' && <section className="tab-panel" role="tabpanel" aria-label="السجل">
       <section className="card"><div className="section-heading"><div><span className="eyebrow">PUBLISH HISTORY</span><h2>سجل المحاولات</h2></div><button onClick={() => void refreshHistory()}>تحديث</button></div><SearchToolbar filters={historyFilters} onChange={setHistoryFilters} workspaces={workspaces} showStatus sessionOptions={visibleSessions} /><div className="search-count">{visibleHistory.length} من {searchData.history.length} محاولة</div></section>
-      <section className="card history-list">{visibleHistory.map((attempt) => <article className="history-row" key={attempt.id}><div><strong>{new Date(attempt.timestamp).toLocaleString('ar')}</strong><small>{attempt.result} · {attempt.action} · Item {attempt.queueItemId}</small>{attempt.error && <small className="error-text">{attempt.error}</small>}</div><a className="primary-link" href={attempt.link} target="_blank" rel="noreferrer">فتح</a></article>)}{!visibleHistory.length && <p className="muted">لا توجد محاولات مطابقة للبحث الحالي.</p>}</section>
+      <section className="card history-list">{visibleHistory.map((attempt) => <article className="history-row" key={attempt.id}><div><strong>{new Date(attempt.timestamp).toLocaleString('ar')}</strong><small>{attempt.result} · {attempt.action} · Item {attempt.queueItemId}</small>{attempt.error && <small className="error-text">{getUserFacingMessage(attempt.error)}</small>}</div><a className="primary-link" href={attempt.link} target="_blank" rel="noreferrer">فتح</a></article>)}{!visibleHistory.length && <p className="muted">لا توجد محاولات مطابقة للبحث الحالي.</p>}</section>
     </section>}
 
     {activeTab === 'analytics' && <AnalyticsTab global={globalAnalytics} workspace={workspaceAnalytics} workspaceRows={allWorkspaceAnalytics} workspaces={workspaces} selectedWorkspaceId={analyticsWorkspaceId} onWorkspaceChange={setAnalyticsWorkspaceId} />}

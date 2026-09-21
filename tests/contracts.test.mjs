@@ -22,6 +22,7 @@ const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const models = fs.readFileSync(path.join(root, 'src/domain/models.ts'), 'utf8');
 const storage = fs.readFileSync(path.join(root, 'src/storage/storage-repository.ts'), 'utf8');
 const pagination = fs.readFileSync(path.join(root, 'src/domain/pagination.ts'), 'utf8');
+const errorMessages = fs.readFileSync(path.join(root, 'src/ui/services/error-messages.ts'), 'utf8');
 
  test('package and manifest versions stay synchronized', () => {
   assert.equal(packageJson.version, manifest.version);
@@ -439,4 +440,10 @@ test('Queue exposes selectable page sizes and previous/next pagination', () => {
   assert.match(uiSource, /pagination-controls/);
   assert.match(uiSource, /setQueuePage\(\(current\) => Math\.max\(1, current - 1\)\)/);
   assert.match(uiSource, /setQueuePage\(\(current\) => Math\.min\(queuePageCount, current \+ 1\)\)/);
+});
+
+test('daily-limit internal code is translated only at the UI presentation boundary', () => {
+  assert.match(errorMessages, /X_DAILY_POST_LIMIT_REACHED/);
+  assert.match(errorMessages, /لقد وصلت إلى الحد الأقصى لعدد المنشورات اليومية/);
+  assert.match(uiSource, /getUserFacingMessage/);
 });
