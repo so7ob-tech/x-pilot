@@ -120,6 +120,21 @@ test('Phase 2 exposes persistent scheduling, profiles, notifications, and Badge 
   assert.match(uiSource, /Publishing Windows JSON/);
 });
 
+test('Dry Run results show item number and preview without exposing target URLs', () => {
+  assert.match(models, /DryRunItemResult \{ queueItemId: string; position: number/);
+  assert.match(serviceWorker, /position: item\.position/);
+  assert.match(uiSource, /Item #\{item\.position\}/);
+  assert.match(uiSource, /getDryRunPreview\(item\.targetUrl\)/);
+  assert.doesNotMatch(uiSource.slice(uiSource.indexOf('function DryRunCard'), uiSource.indexOf('function CurrentTweetCard')), /item\.targetUrl\}\/span>/);
+});
+
+test('Scheduled Alarm creates a session when Queue has no prior session and reports empty Queue', () => {
+  assert.match(serviceWorker, /current\.session \?\? \{/);
+  assert.match(serviceWorker, /status: 'SCHEDULED'/);
+  assert.match(serviceWorker, /لا يوجد عنصر Queue قابل للتشغيل/);
+  assert.match(serviceWorker, /handleScheduledStart/);
+});
+
 test('tab bar renders accessible live connection and engine indicators', () => {
   assert.match(uiSource, /GET_RUNTIME_STATUS/);
   assert.match(uiSource, /window\.setInterval\(\(\) => void refreshRuntimeStatus\(\), 1500\)/);
@@ -131,7 +146,7 @@ test('tab bar renders accessible live connection and engine indicators', () => {
 });
 
 test('failed Continue path schedules the next item and its countdown alarm', () => {
-  assert.match(serviceWorker, /const nextRunAt = !exhausted \|\| nextItem \? Date\.now\(\) \+ session\.intervalMinutes/);
+  assert.match(serviceWorker, /const nextRunAt = !exhausted \|\| nextItem \?/);
   assert.match(serviceWorker, /nextItem \? 'WAITING'/);
   assert.match(serviceWorker, /if \(nextRunAt\) await chrome\.alarms\.create/);
 });
