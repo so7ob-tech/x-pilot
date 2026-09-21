@@ -4,10 +4,17 @@ body { margin: 0; min-width: 360px; }
 .shell { max-width: 720px; margin: 0 auto; padding: 20px; }
 header, .section-heading, .row, .stats, .queue-row { display: flex; align-items: center; gap: 10px; }
 header, .section-heading { justify-content: space-between; }
+.brand-header { align-items: flex-start; }
+.brand-lockup, .settings-heading, .recovery-brand { display: flex; align-items: center; gap: 10px; }
+.brand-logo { width: 48px; height: 48px; object-fit: contain; }
+.settings-heading img, .recovery-brand img { width: 36px; height: 36px; object-fit: contain; }
 h1 { margin: 4px 0 18px; font-size: 26px; }
 h2 { margin: 0 0 14px; font-size: 17px; }
 .eyebrow { color: #58708f; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
 .card { background: white; border: 1px solid #dce4ef; border-radius: 16px; padding: 16px; margin-bottom: 14px; box-shadow: 0 6px 20px #193a5b0b; }
+.settings-card, .recovery-card { border-color: #d9e5fb; }
+.settings-heading, .recovery-brand { margin-bottom: 12px; }
+.recovery-card p { margin: 0 0 12px; }
 input { width: 100%; border: 1px solid #cbd6e3; border-radius: 10px; padding: 10px 12px; font: inherit; background: #fff; }
 .row input { flex: 1; }
 label { display: block; font-size: 13px; font-weight: 700; margin-top: 12px; }

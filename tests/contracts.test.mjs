@@ -8,6 +8,8 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public/manifest.json'), 'utf8'));
 const serviceWorker = fs.readFileSync(path.join(root, 'src/background/service-worker.ts'), 'utf8');
 const contentEntry = fs.readFileSync(path.join(root, 'src/content/content-entry.ts'), 'utf8');
+const uiSource = fs.readFileSync(path.join(root, 'src/ui/main.tsx'), 'utf8');
+const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 
  test('package and manifest versions stay synchronized', () => {
   assert.equal(packageJson.version, manifest.version);
@@ -25,6 +27,25 @@ test('manifest declares the persistent workflow APIs', () => {
   assert.ok(manifest.permissions.includes('alarms'));
   assert.ok(manifest.background?.service_worker);
   assert.ok(manifest.side_panel?.default_path);
+});
+
+test('manifest declares official X-Pilot icon assets', () => {
+  assert.equal(manifest.icons['16'], 'icons/icon16.png');
+  assert.equal(manifest.icons['32'], 'icons/icon32.png');
+  assert.equal(manifest.icons['48'], 'icons/icon48.png');
+  assert.equal(manifest.icons['128'], 'icons/icon128.png');
+  assert.equal(manifest.action.default_icon['16'], 'icons/icon16.png');
+  for (const file of ['icons/icon16.png', 'icons/icon32.png', 'icons/icon48.png', 'icons/icon128.png', 'icons/icon256.png', 'branding/x-pilot-logo.png']) {
+    assert.equal(fs.existsSync(path.join(root, 'public', file)), true, `missing ${file}`);
+  }
+});
+
+test('UI and README use the official X-Pilot branding asset', () => {
+  assert.match(uiSource, /branding\/x-pilot-logo\.png/);
+  assert.match(uiSource, /X-PILOT SETTINGS/);
+  assert.match(uiSource, /X-PILOT RECOVERY/);
+  assert.match(readme, /public\/branding\/x-pilot-logo\.png/);
+  assert.match(readme, /public\/icons/);
 });
 
 test('failed Continue path schedules the next item and its countdown alarm', () => {
