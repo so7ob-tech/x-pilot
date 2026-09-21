@@ -35,6 +35,7 @@
 - Diagnostics Center لفحص الإصدار والتخزين والـAlarm والتبويب وX Login وComposer وPost Button والصلاحيات باستخدام فحص قراءة فقط دون نشر.
 - Data Architecture v4 تفصل Runtime التشغيلي عن Session Records وPublish Attempts والإعدادات، مع Migration آمن من schema v3 وBackup format v2.
 - يستخدم التخزين مفاتيح منطقية منفصلة داخل `chrome.storage.local`، مع سجل Migrations صريح وقياس أداء مؤقت لا يحفظ محتوى التغريدات أو الروابط.
+- يتضمن Data Integrity guards لحالات حذف Bank أو Workspace، Restart أثناء النشر أو WAITING، Alarms قديمة، Sessions قديمة، Queue Items منشورة، Duplicate Fingerprints، Records تالفة، وحقول ناقصة.
 
 ## التطوير
 

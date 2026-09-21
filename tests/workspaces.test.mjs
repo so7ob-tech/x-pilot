@@ -58,3 +58,31 @@ test('allows only one automation Workspace owner at a time', async () => {
   await repository.claimAutomationOwner(second.workspaceId);
   assert.equal(await repository.getAutomationOwner(), second.workspaceId);
 });
+
+
+test('deleting a Bank with Queue references archives it and preserves Queue/History', async () => {
+  store.clear();
+  const created = await repository.createWorkspace('حماية البنك');
+  const bank = await repository.createBank(created.workspaceId, 'Bank', 'https://bank.example');
+  await repository.updateWorkspaceState(created.workspaceId, (state) => ({ ...state, queue: [{ id: 'referenced-item', workspaceId: created.workspaceId, sourceBankId: bank.id, sourceBankUrl: bank.url, targetUrl: 'https://x.com/intent/post?text=hello', position: 1, status: 'PUBLISHED', attempts: 1, publishedAt: 10, createdAt: 1, updatedAt: 1 }], history: [{ id: 'history-1', workspaceId: created.workspaceId, queueItemId: 'referenced-item', link: 'https://x.com', timestamp: 10, attemptNumber: 1, action: 'PUBLISH', result: 'PUBLISHED' }] }));
+  await repository.deleteBank(created.workspaceId, bank.id, true);
+  const state = await repository.getWorkspaceState(created.workspaceId);
+  assert.equal(state.banks.find((candidate) => candidate.id === bank.id)?.archived, true);
+  assert.equal(state.queue[0].status, 'PUBLISHED');
+  assert.equal(state.history.length, 1);
+});
+
+test('deleting a Workspace creates an archive tombstone instead of removing durable records', async () => {
+  store.clear();
+  const first = await repository.createWorkspace('الأولى');
+  const second = await repository.createWorkspace('الثانية');
+  await repository.setActiveWorkspace(first.workspaceId);
+  await repository.updateWorkspaceState(first.workspaceId, (state) => ({ ...state, queue: [{ id: 'durable-item', workspaceId: first.workspaceId, sourceBankUrl: '', targetUrl: 'https://x.com', position: 1, status: 'PUBLISHED', attempts: 1, publishedAt: 10, createdAt: 1, updatedAt: 1 }] }));
+  await repository.deleteWorkspace(first.workspaceId, true);
+  const state = await repository.getWorkspaceState(first.workspaceId);
+  assert.equal(state.workspace.archived, true);
+  assert.equal(state.queue[0].id, 'durable-item');
+  assert.equal((await repository.getMeta()).workspaceOrder.includes(first.workspaceId), true);
+  assert.notEqual((await repository.getMeta()).activeWorkspaceId, first.workspaceId);
+  assert.equal((await repository.getWorkspaceState((await repository.getMeta()).activeWorkspaceId)).workspace.archived, false);
+});

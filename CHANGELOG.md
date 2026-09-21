@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.18.2] - Patch
+
+### Added
+
+- Data Integrity validation for corrupted records, missing fields, duplicate Queue IDs, orphan attempts, and missing Bank references.
+- Safe stale Alarm classification and terminal Queue-item no-republish guards.
+- Restart coverage for publishing, waiting, scheduled, and old-session states.
+
+### Changed
+
+- Bank deletion now preserves referenced Queue and History through archival instead of breaking references.
+- Workspace deletion now creates an archive tombstone and preserves Queue, Attempts, and Session Records.
+- Corrupted or incomplete Workspace records are normalized at the storage boundary with safe defaults.
+
 ## [0.18.1] - Patch
 
 ### Changed

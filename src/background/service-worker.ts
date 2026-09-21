@@ -8,6 +8,7 @@ import { canStartItem, getNextPendingItem, getNextRunnableItem, isTerminalItem }
 import { extractLinksFromValues } from '../extraction/bank-parser';
 import { getNextAllowedPublishingTime } from '../domain/scheduling';
 import { applyBulkStatus, reorderSelected } from '../domain/bulk-queue';
+import { shouldNeverRepublish } from '../domain/data-integrity.ts';
 import { addAttempt, archiveBank, claimAutomationOwner, clearWorkspaceProfile, createBank, createWorkspace, deleteBank, deleteWorkspace, exportBackup, getAutomationOwner, getHistoricalSessions, getMeta, getSettings, getState as getActiveState, getWorkspaceSettings, getWorkspaceState, listBanks, listWorkspaces, releaseAutomationOwner, restoreBank, restoreBackup, saveHistoricalSession, saveQueue, saveSession, saveSettings, setActiveWorkspace, updateBank, updateHistoricalSession, updateState as updateActiveState, updateWorkspace, updateWorkspaceProfile, updateWorkspaceState, archiveWorkspace, restoreWorkspace, validateBackup } from '../storage/storage-repository';
 
 const ALARM_NAME = 'x-queue-next-item';
@@ -335,7 +336,7 @@ async function processCurrentItem(): Promise<void> {
   const session = state.session;
   if (!session || session.status !== 'RUNNING' || !session.currentItemId) return;
   const item = state.queue.find((candidate) => candidate.id === session.currentItemId);
-  if (!item || !canStartItem(item.status)) return;
+  if (!item || shouldNeverRepublish(item) || !canStartItem(item.status)) return;
   const profile = await getWorkspaceSettings(state.workspaceId ?? session.workspaceId ?? (await getMeta()).activeWorkspaceId);
   const allowedAt = getNextAllowedPublishingTime(Date.now(), profile.timezone, profile.publishingWindows);
   if (allowedAt && allowedAt > Date.now() + 500) {
@@ -825,6 +826,18 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
 }
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => { handleMessage(message).then(sendResponse).catch((error) => sendResponse({ error: error instanceof Error ? error.message : 'UNKNOWN_ERROR' })); return true; });
-chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === ALARM_NAME) void advanceSession(); if (alarm.name === SCHEDULE_ALARM_NAME) void handleScheduledStart(); });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  void getState().then((state) => {
+    const session = state.session;
+    if (alarm.name === ALARM_NAME && session?.status === 'WAITING') {
+      if (session.nextRunAt && session.nextRunAt > Date.now()) return;
+      void advanceSession();
+    }
+    if (alarm.name === SCHEDULE_ALARM_NAME && session?.status === 'SCHEDULED') {
+      if (session.scheduledStartAt && session.scheduledStartAt > Date.now()) return;
+      void handleScheduledStart();
+    }
+  }).catch(() => undefined);
+});
 chrome.runtime.onStartup.addListener(() => { void recoverPersistedState(); });
 chrome.runtime.onInstalled.addListener(() => { void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }); void recoverPersistedState(); });
