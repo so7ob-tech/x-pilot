@@ -274,8 +274,9 @@ test('Pause clears the active alarm and Resume recreates a waiting alarm', () =>
 });
 
 test('startup and install listeners both invoke persisted-state recovery', () => {
-  assert.match(serviceWorker, /chrome\.runtime\.onStartup\.addListener\(\(\) => \{ void recoverPersistedState\(\); \}\)/);
-  assert.match(serviceWorker, /chrome\.runtime\.onInstalled\.addListener\(\(\) => \{[\s\S]*void recoverPersistedState\(\); \}\)/);
+  assert.match(serviceWorker, /chrome\.runtime\.onStartup\.addListener\(\(\) => \{ void cleanupRestoreStaging\(\)\.then\(recoverPersistedState\)/);
+  assert.match(serviceWorker, /chrome\.runtime\.onInstalled\.addListener\(\(\) => \{[\s\S]*void cleanupRestoreStaging\(\)\.then\(recoverPersistedState\)/);
+  assert.match(serviceWorker, /startup recovery failed/);
   assert.match(serviceWorker, /await chrome\.alarms\.clear\(ALARM_NAME\)/);
 });
 

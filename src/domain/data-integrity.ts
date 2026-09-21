@@ -13,7 +13,7 @@ export function normalizeQueueItem(input: Partial<QueueItem>, workspaceId: strin
   if (!input.id || input.targetUrl === undefined || input.targetUrl === null) return null;
   const status = queueStatuses.includes(input.status as QueueItemStatus) ? input.status as QueueItemStatus : 'PENDING';
   const attempts = Number.isInteger(input.attempts) && (input.attempts as number) >= 0 ? input.attempts as number : 0;
-  return { id: input.id, workspaceId, sourceBankId: input.sourceBankId, sourceBankUrl: input.sourceBankUrl ?? '', targetUrl: input.targetUrl, label: input.label, position, status, attempts, createdAt: input.createdAt ?? now, updatedAt: input.updatedAt ?? now, startedAt: input.startedAt, publishedAt: input.publishedAt, lastError: input.lastError, operationId: isTerminalQueueItem({ status }) ? undefined : input.operationId, contentFingerprint: input.contentFingerprint, normalizedContent: input.normalizedContent, duplicateStatus: input.duplicateStatus, duplicateOfItemId: input.duplicateOfItemId };
+  return { id: input.id, workspaceId, sourceBankId: input.sourceBankId, sourceBankUrl: input.sourceBankUrl ?? '', targetUrl: input.targetUrl, label: input.label, position, status, attempts, createdAt: input.createdAt ?? now, updatedAt: input.updatedAt ?? now, startedAt: input.startedAt, publishedAt: input.publishedAt, lastError: input.lastError, operationId: isTerminalQueueItem({ status }) ? undefined : input.operationId, publishIntentId: input.publishIntentId, publishStartedAt: input.publishStartedAt, publishSubmittedAt: input.publishSubmittedAt, contentFingerprint: input.contentFingerprint, normalizedContent: input.normalizedContent, duplicateStatus: input.duplicateStatus, duplicateOfItemId: input.duplicateOfItemId };
 }
 
 export function normalizeWorkspaceState(input: Partial<WorkspaceState>, workspaceId: string, fallbackWorkspace: WorkspaceState['workspace'], now = Date.now()): WorkspaceState {
@@ -51,6 +51,6 @@ export function classifyAlarm(runtime: AutomationSessionRuntime | null | undefin
   return 'EXECUTE';
 }
 
-export function shouldNeverRepublish(item: Pick<QueueItem, 'status' | 'publishedAt' | 'contentFingerprint'>): boolean {
-  return isTerminalQueueItem(item) || Boolean(item.publishedAt);
+export function shouldNeverRepublish(item: Pick<QueueItem, 'status' | 'publishedAt' | 'contentFingerprint' | 'publishIntentId' | 'publishStartedAt' | 'publishSubmittedAt'>): boolean {
+  return isTerminalQueueItem(item) || Boolean(item.publishedAt || item.publishIntentId || item.publishStartedAt || item.publishSubmittedAt);
 }

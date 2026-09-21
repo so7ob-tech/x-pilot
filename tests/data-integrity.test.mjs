@@ -27,9 +27,9 @@ test('duplicate fingerprints remain equal after normalization', async () => {
   assert.equal(first?.fingerprint, second?.fingerprint);
 });
 
-test('restart during publishing/opening recovers to pending, never published', () => {
+test('restart during publishing/opening quarantines publishing and recovers opening safely', () => {
   const recovered = normalizeRecovery({ queue: [item('PUBLISHING')], session: session('RUNNING', 'item-1'), history: [] }, 100);
-  assert.equal(recovered.queue[0].status, 'PENDING');
+  assert.equal(recovered.queue[0].status, 'PUBLISHED_UNVERIFIED');
   assert.equal(recovered.session.status, 'PAUSED');
 });
 
