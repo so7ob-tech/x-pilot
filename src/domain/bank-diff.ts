@@ -1,9 +1,9 @@
-import type { BankDiffItem, BankDiffResult, BankSnapshotItem, QueueItem, TweetBank } from './models';
+import type { BankDiffItem, BankDiffResult, BankSnapshotItem, DuplicatePolicy, QueueItem, TweetBank } from './models';
 
 const isSupportedUrl = (url: string) => /^https?:\/\/\S+$/i.test(url.trim());
 const key = (url: string) => url.trim();
 
-export function classifyBankDiff(workspaceId: string, bank: TweetBank, refreshed: BankSnapshotItem[], queue: QueueItem[], refreshedAt = Date.now()): BankDiffResult {
+export function classifyBankDiff(workspaceId: string, bank: TweetBank, refreshed: BankSnapshotItem[], queue: QueueItem[], refreshedAt = Date.now(), fingerprintIndex = new Map<string, { item: QueueItem; workspaceId: string }>(), duplicatePolicy: DuplicatePolicy = 'BLOCK'): BankDiffResult {
   const queueByUrl = new Map(queue.map((item) => [key(item.targetUrl), item]));
   const seen = new Set<string>();
   const items: BankDiffItem[] = [];
@@ -16,7 +16,11 @@ export function classifyBankDiff(workspaceId: string, bank: TweetBank, refreshed
       continue;
     }
     const existing = queueByUrl.get(url);
-    if (!existing) items.push({ id: crypto.randomUUID(), url, label: candidate.label, category: 'NEW' });
+    if (!existing) {
+      const fingerprintMatch = candidate.contentFingerprint ? fingerprintIndex.get(candidate.contentFingerprint) : undefined;
+      const duplicateStatus = fingerprintMatch?.item.status === 'PUBLISHED' || fingerprintMatch?.item.status === 'PUBLISHED_UNVERIFIED' ? 'PUBLISHED_DUPLICATE' : fingerprintMatch ? 'DUPLICATE' : 'UNIQUE';
+      items.push({ id: crypto.randomUUID(), url, label: candidate.label, contentFingerprint: candidate.contentFingerprint, normalizedContent: candidate.normalizedContent, category: 'NEW', duplicateStatus, duplicateOfWorkspaceId: fingerprintMatch?.workspaceId });
+    }
     else if (existing.status === 'PUBLISHED' || existing.status === 'PUBLISHED_UNVERIFIED') items.push({ id: crypto.randomUUID(), url, label: candidate.label ?? existing.label, category: 'PREVIOUSLY_PUBLISHED', existingQueueItemId: existing.id });
     else items.push({ id: crypto.randomUUID(), url, label: candidate.label ?? existing.label, category: 'EXISTING', existingQueueItemId: existing.id });
   }
@@ -25,14 +29,14 @@ export function classifyBankDiff(workspaceId: string, bank: TweetBank, refreshed
     const url = key(previous.url);
     if (url && !refreshedUrls.has(url)) items.push({ id: crypto.randomUUID(), url, label: previous.label, category: 'REMOVED', reason: 'MISSING_FROM_REFRESH' });
   }
-  return { workspaceId, bankId: bank.id, refreshedAt, items, selectedNewIds: items.filter((item) => item.category === 'NEW').map((item) => item.id) };
+  return { workspaceId, bankId: bank.id, refreshedAt, items, selectedNewIds: items.filter((item) => item.category === 'NEW' && (item.duplicateStatus === 'UNIQUE' || duplicatePolicy === 'ALLOW')).map((item) => item.id) };
 }
 
-export function mergeSelectedDiffItems(queue: QueueItem[], diff: BankDiffResult, bank: TweetBank, selectedIds: string[], now = Date.now()): QueueItem[] {
+export function mergeSelectedDiffItems(queue: QueueItem[], diff: BankDiffResult, bank: TweetBank, selectedIds: string[], now = Date.now(), duplicatePolicy: DuplicatePolicy = 'BLOCK'): QueueItem[] {
   const selected = new Set(selectedIds);
   const existingUrls = new Set(queue.map((item) => key(item.targetUrl)));
-  const additions = diff.items.filter((item) => item.category === 'NEW' && selected.has(item.id) && !existingUrls.has(key(item.url))).map((item, index) => ({
-    id: crypto.randomUUID(), workspaceId: diff.workspaceId, sourceBankId: bank.id, sourceBankUrl: bank.url, targetUrl: item.url, label: item.label, position: queue.length + index + 1, status: 'PENDING' as const, attempts: 0, createdAt: now, updatedAt: now,
+  const additions = diff.items.filter((item) => item.category === 'NEW' && selected.has(item.id) && !existingUrls.has(key(item.url)) && (duplicatePolicy === 'ALLOW' || item.duplicateStatus === 'UNIQUE' || item.duplicateStatus === 'DUPLICATE' && duplicatePolicy === 'WARN')).map((item, index) => ({
+    id: crypto.randomUUID(), workspaceId: diff.workspaceId, sourceBankId: bank.id, sourceBankUrl: bank.url, targetUrl: item.url, label: item.label, position: queue.length + index + 1, status: 'PENDING' as const, attempts: 0, createdAt: now, updatedAt: now, contentFingerprint: item.contentFingerprint, normalizedContent: item.normalizedContent, duplicateStatus: item.duplicateStatus,
   }));
   return [...queue, ...additions].map((item, index) => ({ ...item, position: index + 1 }));
 }
