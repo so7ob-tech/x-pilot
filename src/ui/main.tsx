@@ -7,7 +7,7 @@ import './styles.css';
 
 const initialState: AppState = { queue: [], session: null, history: [] };
 const initialRuntimeStatus: RuntimeStatus = { engineStatus: 'IDLE', connection: 'NOT_REQUIRED', checkedAt: 0 };
-type TabId = 'operation' | 'queue' | 'history' | 'workspaces' | 'settings';
+type TabId = 'operation' | 'tests' | 'queue' | 'history' | 'workspaces' | 'settings';
 
 function send(message: RuntimeMessage): Promise<any> { return chrome.runtime.sendMessage(message); }
 
@@ -101,6 +101,7 @@ function App() {
     <div className="workspace-switcher"><span className="eyebrow">WORKSPACE</span><select value={meta?.activeWorkspaceId ?? ''} onChange={(event) => void switchWorkspace(event.target.value)} aria-label="Workspace النشطة">{workspaces.filter((workspace) => !workspace.archived).map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.favorite ? '★ ' : ''}{workspace.name}</option>)}</select><button onClick={() => setActiveTab('workspaces')}>إدارة المساحات</button></div>
     <nav className="tabs-bar" aria-label="حالة X-Pilot والتبويبات"><div className="tabs" role="tablist">
       <TabButton id="operation" activeTab={activeTab} onSelect={setActiveTab} icon="▶" label="التشغيل" />
+      <TabButton id="tests" activeTab={activeTab} onSelect={setActiveTab} icon="✓" label="اختبارات البدء" />
       <TabButton id="queue" activeTab={activeTab} onSelect={setActiveTab} icon="☷" label="بنك التغريدات" />
       <TabButton id="history" activeTab={activeTab} onSelect={setActiveTab} icon="◷" label="السجل" />
       <TabButton id="workspaces" activeTab={activeTab} onSelect={setActiveTab} icon="▦" label="مساحات العمل" />
@@ -113,10 +114,14 @@ function App() {
     {activeTab === 'operation' && <section className="tab-panel" role="tabpanel" aria-label="التشغيل">
       <section className="card"><div className="section-heading"><h2>لوحة التشغيل</h2><span className="session-progress">{published} منشور · {remaining} متبقٍ</span></div><div className="stats"><div><b>{state.queue.length}</b><span>الإجمالي</span></div><div><b>{published}</b><span>منشور</span></div><div><b>{failed}</b><span>فشل</span></div><div><b>{remaining}</b><span>متبقٍ</span></div></div></section>
       <CurrentTweetCard item={currentItem} position={session?.currentIndex} logoUrl={logoUrl} />
-      <PreflightCard result={preflight} onCheck={() => void runPreflightCheck()} />
-      <DryRunCard result={dryRun} onFirst={() => void runDryRun('DRY_RUN_FIRST')} onQueue={() => void runDryRun('DRY_RUN_QUEUE')} onStop={() => void send({ type: 'DRY_RUN_STOP' })} />
       {session?.status === 'PAUSED' && remaining > 0 && <RecoveryCard logoUrl={logoUrl} onResume={() => void act({ type: 'RESUME' }, 'تم استئناف Queue')} />}
       <section className="card controls"><h2>التشغيل</h2><div className="row controls-row"><button className="primary" onClick={start} disabled={!state.queue.length || canPause || canResume || session?.status === 'SCHEDULED' || preflight === null || !preflight.ready}>Start</button><button onClick={() => void act({ type: 'PAUSE' }, 'تم إيقاف Queue مؤقتًا')} disabled={!canPause}>Pause</button><button onClick={() => void act({ type: 'RESUME' }, 'تم استئناف Queue')} disabled={!canResume}>Resume</button><button className="danger" onClick={() => void stop()} disabled={!session || session.status === 'STOPPED' || session.status === 'COMPLETED'}>{session?.status === 'SCHEDULED' ? 'Cancel Schedule' : 'Stop'}</button></div><div className="schedule-controls"><label>Start At<input type="datetime-local" value={scheduleAt} onChange={(event) => setScheduleAt(event.target.value)} /></label><div className="row controls-row"><button onClick={() => void schedule(false)} disabled={!state.queue.length || !scheduleAt || canPause || canResume}>Schedule</button><button onClick={() => void schedule(true)} disabled={session?.status !== 'SCHEDULED' || !scheduleAt}>Reschedule</button></div></div><p className="muted">العنصر الحالي: {session?.currentItemId ? currentItem?.position ?? '-' : '-'}</p>{session?.status === 'SCHEDULED' && session.scheduledStartAt && <div className="countdown"><span>تبدأ الجلسة في</span><strong>{new Date(session.scheduledStartAt).toLocaleString('ar')}</strong></div>}{session?.status === 'PAUSED' && <p className="paused-hint">Queue متوقف مؤقتًا — اضغط Resume للمتابعة.</p>}{session?.status === 'WAITING' && <div className="countdown"><span>التغريدة التالية بعد</span><strong>{formatCountdown(countdownSeconds)}</strong></div>}</section>
+    </section>}
+
+    {activeTab === 'tests' && <section className="tab-panel" role="tabpanel" aria-label="اختبارات البدء">
+      <div className="card tab-intro"><span className="eyebrow">STARTUP VALIDATION</span><h2>اختبارات البدء</h2><p className="muted">تحقق من جاهزية X وQueue والصلاحيات قبل تشغيل النشر. اختبار Dry Run يفتح العناصر ويفحص Composer وزر Post دون الضغط عليه أو زيادة المحاولات.</p></div>
+      <PreflightCard result={preflight} onCheck={() => void runPreflightCheck()} />
+      <DryRunCard result={dryRun} onFirst={() => void runDryRun('DRY_RUN_FIRST')} onQueue={() => void runDryRun('DRY_RUN_QUEUE')} onStop={() => void send({ type: 'DRY_RUN_STOP' })} />
     </section>}
 
     {activeTab === 'queue' && <section className="tab-panel" role="tabpanel" aria-label="بنك التغريدات وقائمة Queue">

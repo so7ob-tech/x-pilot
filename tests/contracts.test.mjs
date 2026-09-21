@@ -50,13 +50,14 @@ test('UI and README use the official X-Pilot branding asset', () => {
   assert.match(readme, /public\/icons/);
 });
 
-test('Side Panel exposes operation, tweet-bank, history, and settings tabs', () => {
-  assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'history' \| 'workspaces' \| 'settings'/);
+test('Side Panel exposes operation, startup-tests, tweet-bank, history, and settings tabs', () => {
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'history' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /aria-label="حالة X-Pilot والتبويبات"/);
   assert.match(uiSource, /label="التشغيل"/);
   assert.match(uiSource, /label="بنك التغريدات"/);
   assert.match(uiSource, /label="الإعدادات"/);
   assert.match(uiSource, /useState<TabId>\('operation'\)/);
+  assert.match(uiSource, /label="اختبارات البدء"/);
 });
 
 test('operation tab includes current-tweet information and existing controls', () => {
@@ -256,7 +257,7 @@ test('Workspace runtime operations expose explicit ownership and management APIs
   assert.match(serviceWorker, /await claimAutomationOwner\(message\.workspaceId \?\? meta\.activeWorkspaceId\)/);
   assert.match(serviceWorker, /GET_WORKSPACES/);
   assert.match(serviceWorker, /SET_ACTIVE_WORKSPACE/);
-  assert.match(uiSource, /type TabId = 'operation' \| 'queue' \| 'history' \| 'workspaces' \| 'settings'/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'history' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /function WorkspaceCard/);
 });
 
