@@ -411,6 +411,8 @@ async function processCurrentItem(): Promise<void> {
     await updateRuntimeState((current) => ({ ...current, queue: current.queue.map((candidate) => candidate.id === item.id && candidate.publishIntentId === operationId ? { ...candidate, publishSubmittedAt: Date.now(), updatedAt: Date.now() } : candidate) }));
     await wait(1800);
     const after = await inspectTab(tabId);
+    const publishedUrlResult = await chrome.tabs.sendMessage(tabId, { type: 'X_GET_PUBLISHED_URL' }).catch(() => undefined) as { publishedPostUrl?: string } | undefined;
+    const publishedPostUrl = publishedUrlResult?.publishedPostUrl;
     if (after.dailyPostLimitReached || after.reason === 'X_DAILY_POST_LIMIT_REACHED') throw new Error('X_DAILY_POST_LIMIT_REACHED');
     if (!result?.ok) throw new Error(result?.reason ?? 'PUBLISH_FAILED');
     const finalStatus = after.composerFound && after.contentPresent ? 'PUBLISHED_UNVERIFIED' : 'PUBLISHED';
@@ -422,7 +424,7 @@ async function processCurrentItem(): Promise<void> {
       ...current,
       queue: current.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: finalStatus, publishedAt: finishedAt, updatedAt: finishedAt, operationId: undefined, publishIntentId: undefined, publishStartedAt: undefined, publishSubmittedAt: undefined } : candidate),
       session: current.session ? { ...current.session, status: nextStatus, currentItemId: nextItem?.id, currentIndex: nextItem?.position ?? current.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? finishedAt : current.session.completedAt, updatedAt: finishedAt } : null,
-      history: [...current.history, { id: crypto.randomUUID(), workspaceId: current.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, timestamp: finishedAt, attemptNumber: item.attempts + 1, action: 'PUBLISH', result: finalStatus }]
+      history: [...current.history, { id: crypto.randomUUID(), workspaceId: current.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, sourceUrl: item.targetUrl, publishedPostUrl, timestamp: finishedAt, attemptNumber: item.attempts + 1, action: 'PUBLISH', result: finalStatus }]
     }));
     await syncHistoricalSession(nextState, nextStatus === 'COMPLETED' ? 'COMPLETED' : 'WAITING');
     await chrome.alarms.clear(ALARM_NAME);
@@ -443,7 +445,7 @@ async function processCurrentItem(): Promise<void> {
           ? { ...candidate, status: 'PENDING', attempts: item.attempts, lastError: message, operationId: undefined, updatedAt: Date.now() }
           : candidate),
         session: currentState.session ? { ...currentState.session, status: 'PAUSED', currentItemId: item.id, nextRunAt: undefined, updatedAt: Date.now() } : null,
-        history: [...currentState.history, { id: crypto.randomUUID(), workspaceId: currentState.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, timestamp: Date.now(), attemptNumber: item.attempts, action: 'PUBLISH', result: 'PAUSED', error: message }]
+        history: [...currentState.history, { id: crypto.randomUUID(), workspaceId: currentState.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, sourceUrl: item.targetUrl, timestamp: Date.now(), attemptNumber: item.attempts, action: 'PUBLISH', result: 'PAUSED', error: message }]
       }));
       await syncHistoricalSession(pausedState, 'PAUSED', message);
       await chrome.alarms.clear(ALARM_NAME);
@@ -473,7 +475,7 @@ async function processCurrentItem(): Promise<void> {
           ? { ...candidate, status: 'PUBLISHED_UNVERIFIED', publishedAt: candidate.publishedAt ?? uncertainAt, lastError: 'PUBLISH_OUTCOME_UNVERIFIED', operationId: undefined, updatedAt: uncertainAt }
           : candidate),
         session: currentState.session ? { ...currentState.session, status: 'PAUSED', currentItemId: item.id, nextRunAt: undefined, updatedAt: uncertainAt } : null,
-        history: [...currentState.history, { id: crypto.randomUUID(), workspaceId: currentState.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, timestamp: uncertainAt, attemptNumber: item.attempts, action: 'PUBLISH', result: 'PUBLISHED_UNVERIFIED', error: 'PUBLISH_OUTCOME_UNVERIFIED' }]
+        history: [...currentState.history, { id: crypto.randomUUID(), workspaceId: currentState.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, sourceUrl: item.targetUrl, timestamp: uncertainAt, attemptNumber: item.attempts, action: 'PUBLISH', result: 'PUBLISHED_UNVERIFIED', error: 'PUBLISH_OUTCOME_UNVERIFIED' }]
       }));
       await syncHistoricalSession(uncertain, 'PAUSED', 'PUBLISH_OUTCOME_UNVERIFIED');
       await chrome.alarms.clear(ALARM_NAME);
@@ -497,7 +499,7 @@ async function processCurrentItem(): Promise<void> {
       ...currentState,
       queue: currentState.queue.map((candidate) => candidate.id === item.id ? { ...candidate, status: failedStatus, lastError: message, operationId: undefined, updatedAt: Date.now() } : candidate),
       session: currentState.session ? { ...currentState.session, status: nextStatus, currentItemId: nextItemId, currentIndex: nextItemIndex ?? currentState.session.currentIndex, nextRunAt, completedAt: nextStatus === 'COMPLETED' ? Date.now() : currentState.session.completedAt, updatedAt: Date.now() } : null,
-      history: [...currentState.history, { id: crypto.randomUUID(), workspaceId: currentState.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, timestamp: Date.now(), attemptNumber: item.attempts + 1, action: 'PUBLISH', result: failedStatus, error: message }]
+      history: [...currentState.history, { id: crypto.randomUUID(), workspaceId: currentState.workspaceId, sessionId: session.id, queueItemId: item.id, link: item.targetUrl, sourceUrl: item.targetUrl, timestamp: Date.now(), attemptNumber: item.attempts + 1, action: 'PUBLISH', result: failedStatus, error: message }]
     }));
     await syncHistoricalSession(failedState, nextStatus === 'COMPLETED' ? 'COMPLETED' : nextStatus === 'PAUSED' ? 'PAUSED' : 'WAITING', message);
     await chrome.alarms.clear(ALARM_NAME);
