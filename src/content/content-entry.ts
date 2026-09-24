@@ -1,4 +1,4 @@
-import { inspect, publish } from './providers/x-provider-adapter';
+import { getPublishedPostUrl, inspect, publish } from './providers/x-provider-adapter';
 
 const listenerKey = '__xPilotContentListenerInstalled';
 const contentGlobal = globalThis as typeof globalThis & Record<string, unknown>;
@@ -12,6 +12,18 @@ if (!contentGlobal[listenerKey]) {
     }
     if (message.type === 'X_PUBLISH') {
       sendResponse(publish());
+      return true;
+    }
+    if (message.type === 'X_GET_PUBLISHED_URL') {
+      sendResponse({ publishedPostUrl: getPublishedPostUrl() });
+      return true;
+    }
+    if (message.type === 'X_GET_PUBLISHED_URL') {
+      sendResponse({ publishedPostUrl: getPublishedPostUrl() });
+      return true;
+    }
+    if (message.type === 'X_GET_PUBLISHED_URL') {
+      sendResponse({ publishedPostUrl: getPublishedPostUrl() });
       return true;
     }
     return false;

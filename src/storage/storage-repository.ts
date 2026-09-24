@@ -362,7 +362,8 @@ export async function renewStartLock(token: string, now = Date.now(), ttlMs = 15
 export async function addAttempt(attempt: PublishAttempt | LegacyPublishAttempt): Promise<void> {
   const meta = await getMeta();
   const workspaceId = attempt.workspaceId ?? meta.automationWorkspaceId ?? meta.activeWorkspaceId;
-  const legacy: LegacyPublishAttempt = { id: attempt.id, workspaceId, sessionId: attempt.sessionId, queueItemId: attempt.queueItemId, link: ('targetUrl' in attempt ? attempt.targetUrl : attempt.link) ?? '', timestamp: attempt.timestamp, attemptNumber: attempt.attemptNumber, action: attempt.action, result: attempt.result, error: 'errorMessage' in attempt ? attempt.errorMessage ?? attempt.error : attempt.error };
+  const sourceUrl = ('sourceUrl' in attempt ? attempt.sourceUrl : undefined) ?? ('targetUrl' in attempt ? attempt.targetUrl : attempt.link) ?? '';
+  const legacy: LegacyPublishAttempt = { id: attempt.id, workspaceId, sessionId: attempt.sessionId, queueItemId: attempt.queueItemId, link: sourceUrl, sourceUrl, publishedPostUrl: 'publishedPostUrl' in attempt ? attempt.publishedPostUrl : undefined, timestamp: attempt.timestamp, attemptNumber: attempt.attemptNumber, action: attempt.action, result: attempt.result, error: 'errorMessage' in attempt ? attempt.errorMessage ?? attempt.error : attempt.error };
   await updateWorkspaceState(workspaceId, (state) => ({ ...state, history: [...state.history, legacy].slice(-2000) }));
 }
 export async function getHistoricalSessions(workspaceId: string): Promise<HistoricalSession[]> {
