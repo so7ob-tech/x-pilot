@@ -16,7 +16,7 @@ export interface AutomationSession {
   keepAutomationTabOpen: boolean; closeTabOnComplete: boolean; version: number; updatedAt: number; historicalSessionId?: string;
 }
 export interface LegacyPublishAttempt {
-  id: string; workspaceId?: string; sessionId?: string; queueItemId: string; link: string; timestamp: number;
+  id: string; workspaceId?: string; sessionId?: string; queueItemId: string; link: string; sourceUrl?: string; publishedPostUrl?: string; timestamp: number;
   attemptNumber: number; action: string; result: string; error?: string;
 }
 export interface HistoricalSession {
@@ -40,8 +40,8 @@ export interface WorkspaceSettings { workspaceId: string; overrides: Partial<Omi
 export interface AutomationSessionRuntime { workspaceId: string; sessionId: string; bankId?: string; bankUrl?: string; status: SessionStatus; currentItemId?: string; currentIndex: number; total: number; startedAt?: number; scheduledStartAt?: number; pausedAt?: number; completedAt?: number; nextRunAt?: number; automationTabId?: number; alarmName?: string; operationId?: string; alarmFailureCount?: number; lastAlarmError?: string; updatedAt: number; version: number; }
 export interface AutomationSessionRecord extends HistoricalSession { scheduledStartAt?: number; timezone: string; }
 export interface BankSnapshot { id: string; bankId: string; workspaceId: string; capturedAt: number; items: BankSnapshotItem[]; }
-export interface PublishAttempt extends Omit<LegacyPublishAttempt, 'link' | 'action' | 'result' | 'error'> { targetUrl?: string; link?: string; action: string; result: string; error?: string; errorCode?: string; errorMessage?: string; durationMs?: number; adapter?: string; }
-export interface LegacyPublishAttempt { id: string; workspaceId?: string; sessionId?: string; queueItemId: string; link: string; timestamp: number; attemptNumber: number; action: string; result: string; error?: string; }
+export interface PublishAttempt extends Omit<LegacyPublishAttempt, 'link' | 'action' | 'result' | 'error'> { targetUrl?: string; link?: string; sourceUrl?: string; publishedPostUrl?: string; action: string; result: string; error?: string; errorCode?: string; errorMessage?: string; durationMs?: number; adapter?: string; }
+export interface LegacyPublishAttempt { id: string; workspaceId?: string; sessionId?: string; queueItemId: string; link: string; sourceUrl?: string; publishedPostUrl?: string; timestamp: number; attemptNumber: number; action: string; result: string; error?: string; }
 export const defaultSettings: Settings = { intervalMinutes: 2, maxRetries: 2, failureBehavior: 'CONTINUE', confirmBeforeStart: true, keepAutomationTabOpen: true, closeTabOnComplete: false, duplicatePolicy: 'BLOCK', publishingWindows: [], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', notificationsEnabled: true, badgeMode: 'COUNT' };
 export type AutomationConnection = 'CONNECTED' | 'DISCONNECTED' | 'NOT_REQUIRED';
 export interface RuntimeStatus { engineStatus: SessionStatus; connection: AutomationConnection; automationTabId?: number; automationWorkspaceId?: string; checkedAt: number; }
@@ -71,7 +71,7 @@ export type RuntimeMessage =
   | { type: 'START'; confirmed?: boolean; workspaceId?: string } | { type: 'SCHEDULE'; startAt: number; workspaceId?: string } | { type: 'RESCHEDULE'; startAt: number; workspaceId?: string } | { type: 'CANCEL_SCHEDULE'; workspaceId?: string } | { type: 'PAUSE'; workspaceId?: string } | { type: 'RESUME'; workspaceId?: string } | { type: 'STOP'; workspaceId?: string } | { type: 'DRY_RUN_FIRST'; workspaceId?: string } | { type: 'DRY_RUN_QUEUE'; workspaceId?: string } | { type: 'DRY_RUN_STOP' } | { type: 'GET_DRY_RUN' }
   | { type: 'EXPORT_BACKUP' } | { type: 'VALIDATE_BACKUP'; backup: unknown } | { type: 'RESTORE_BACKUP'; backup: unknown; confirmed: boolean }
   | { type: 'SKIP_CURRENT' } | { type: 'RETRY_ITEM'; itemId: string } | { type: 'REORDER'; itemId: string; direction: 'up' | 'down' } | { type: 'DELETE_ITEM'; itemId: string } | { type: 'CLEAR_COMPLETED' } | { type: 'BULK_ACTION'; action: BulkQueueAction; itemIds: string[]; workspaceId?: string; bankId?: string; confirmed?: boolean } | { type: 'UPDATE_SETTINGS'; settings: Settings; workspaceId?: string };
-export type ContentMessage = { type: 'X_INSPECT' } | { type: 'X_PUBLISH' };
+export type ContentMessage = { type: 'X_INSPECT' } | { type: 'X_PUBLISH' } | { type: 'X_GET_PUBLISHED_URL' };
 export interface ContentInspection { ok: boolean; pageKind: 'X' | 'LOGIN' | 'CHALLENGE' | 'ERROR' | 'UNKNOWN'; composerFound: boolean; contentPresent: boolean; postButtonFound: boolean; postButtonEnabled: boolean; reason?: string; dailyPostLimitReached?: boolean; }
 
 export function historicalStatus(status: SessionStatus): HistoricalSessionStatus | undefined {

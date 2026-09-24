@@ -8,6 +8,8 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public/manifest.json'), 'utf8'));
 const serviceWorker = fs.readFileSync(path.join(root, 'src/background/service-worker.ts'), 'utf8');
 const contentEntry = fs.readFileSync(path.join(root, 'src/content/content-entry.ts'), 'utf8');
+const contentAdapter = fs.readFileSync(path.join(root, 'src/content/providers/x-provider-adapter.ts'), 'utf8');
+const content = `${contentEntry}\n${contentAdapter}`;
 const uiSource = [
   'src/ui/main.tsx',
   'src/ui/types/navigation.ts',
@@ -70,8 +72,8 @@ test('UI and README use the official X-Pilot branding asset', () => {
   assert.match(readme, /public\/icons/);
 });
 
-test('Side Panel exposes operation, startup-tests, tweet-bank, sessions, history, analytics, and settings tabs', () => {
-  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'diagnostics' \| 'workspaces' \| 'settings'/);
+test('Side Panel exposes operation, startup-tests, tweet-bank, unified sessions, analytics, and settings tabs', () => {
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'analytics' \| 'diagnostics' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /aria-label=\{t\('nav\.operation'\)\}/);
   assert.match(uiSource, /label=\{t\('nav\.operation'\)\}/);
   assert.match(uiSource, /label=\{t\('nav\.banks'\)\}/);
@@ -79,6 +81,18 @@ test('Side Panel exposes operation, startup-tests, tweet-bank, sessions, history
   assert.match(uiSource, /useState<TabId>\('operation'\)/);
   assert.match(uiSource, /label=\{t\('nav\.startupTests'\)\}/);
   assert.match(uiSource, /label=\{t\('nav\.analytics'\)\}/);
+  assert.match(uiSource, /session-summary/);
+  assert.match(uiSource, /session-attempts/);
+});
+
+test('Unified activity records preserve source and published post links', () => {
+  assert.match(models, /publishedPostUrl\?: string/);
+  assert.match(models, /sourceUrl\?: string/);
+  assert.match(content, /X_GET_PUBLISHED_URL/);
+  assert.match(contentAdapter, /getPublishedPostUrl/);
+  assert.match(serviceWorker, /publishedPostUrl/);
+  assert.match(uiSource, /sessions\.publishedLink/);
+  assert.match(uiSource, /sessions\.sourceLink/);
 });
 
 test('operation tab includes current-tweet information and existing controls', () => {
@@ -175,7 +189,7 @@ test('Preflight automatically opens X and inspects readiness without publishing'
 test('Feature 13 exposes shared advanced search filters across all entity views', () => {
   assert.match(uiSource, /SearchToolbar/);
   assert.match(uiSource, /nav\.sessions/);
-  assert.match(uiSource, /nav\.history/);
+  assert.match(uiSource, /history\.title/);
   assert.match(uiSource, /filterQueue/);
   assert.match(uiSource, /filterBanks/);
   assert.match(uiSource, /filterSessions/);
@@ -244,7 +258,7 @@ test('Feature 16 exposes a read-only Diagnostics Center with no publish path', (
   assert.match(serviceWorker, /finally/);
   assert.match(serviceWorker, /DIAGNOSTICS_INSPECTION_FAILED/);
   assert.doesNotMatch(serviceWorker.slice(serviceWorker.indexOf('async function runDiagnostics'), serviceWorker.indexOf('function classifyDryRunInspection')), /X_PUBLISH|processCurrentItem|START/);
-  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'diagnostics'/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'analytics' \| 'diagnostics'/);
   assert.match(uiSource, /label=\{t\('nav\.diagnostics'\)\}/);
   assert.match(uiSource, /diagnostics\.run/);
   assert.match(uiSource, /diagnostics\.readOnly/);
@@ -382,7 +396,7 @@ test('Workspace runtime operations expose explicit ownership and management APIs
   assert.match(serviceWorker, /await claimAutomationOwner\(workspaceId\)/);
   assert.match(serviceWorker, /GET_WORKSPACES/);
   assert.match(serviceWorker, /SET_ACTIVE_WORKSPACE/);
-  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'history' \| 'analytics' \| 'diagnostics' \| 'workspaces' \| 'settings'/);
+  assert.match(uiSource, /type TabId = 'operation' \| 'tests' \| 'queue' \| 'sessions' \| 'analytics' \| 'diagnostics' \| 'workspaces' \| 'settings'/);
   assert.match(uiSource, /function WorkspaceCard/);
 });
 

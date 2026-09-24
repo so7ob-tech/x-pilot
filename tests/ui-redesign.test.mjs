@@ -28,7 +28,8 @@ test('premium UI uses semantic design tokens and shared primitives', () => {
 });
 
 test('navigation remains feature-complete while using grouped information architecture', () => {
-  for (const key of ['operation', 'startupTests', 'banks', 'sessions', 'history', 'analytics', 'diagnostics', 'workspaces', 'settings']) assert.match(ui, new RegExp(`nav\\.${key}`));
+  for (const key of ['operation', 'startupTests', 'banks', 'sessions', 'analytics', 'diagnostics', 'workspaces', 'settings']) assert.match(ui, new RegExp(`nav\\.${key}`));
+  assert.match(ui, /history\.title/);
   for (const key of ['control', 'content', 'activity', 'insights', 'manage']) assert.match(ui, new RegExp(`common\.${key}`));
   assert.match(ui, /aria-current=/);
 });

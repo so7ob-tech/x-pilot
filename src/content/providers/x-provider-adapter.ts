@@ -108,6 +108,14 @@ export function inspect(): ContentInspection {
   return { ok, pageKind: 'X', composerFound: Boolean(composer), contentPresent, postButtonFound: Boolean(postButton), postButtonEnabled, reason: ok ? undefined : 'PUBLISH_CONTROLS_NOT_READY', dailyPostLimitReached: false };
 }
 
+export function getPublishedPostUrl(): string | undefined {
+  const statusLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
+    .map((anchor) => anchor.href)
+    .filter((href) => /^https?:\/\/(?:www\.)?(?:x|twitter)\.com\/[^/]+\/status\/\d+/i.test(href));
+  const current = location.href.match(/^https?:\/\/(?:www\.)?(?:x|twitter)\.com\/[^/]+\/status\/\d+/i)?.[0];
+  return statusLinks.at(-1) ?? current;
+}
+
 export function publish(): ContentInspection {
   const state = inspect();
   if (!state.ok) return state;

@@ -315,6 +315,15 @@ button.danger:hover, .ui-button-danger:hover { border-color: #df9c99; }
 .history-row:last-child { border-bottom: 0; }
 .history-row small { display: block; margin-top: 3px; color: var(--color-text-3); }
 .history-counts { display: flex; gap: 8px; color: var(--color-text-2); font-size: 11px; white-space: nowrap; }
+.activity-list { display: grid; gap: 14px; }
+.session-summary { padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+.session-summary-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.session-summary-header small, .session-summary-meta span { display: block; margin-top: 4px; color: var(--color-text-3); font-size: 11px; }
+.session-summary-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; margin-top: 12px; padding: 10px 0; border-top: 1px solid var(--color-border-subtle); border-bottom: 1px solid var(--color-border-subtle); }
+.session-attempts { margin-top: 12px; }
+.session-attempts h3 { margin: 0 0 4px; font-size: 12px; }
+.session-attempts .history-row { align-items: flex-start; }
+.session-attempts .primary-link, .session-attempts .secondary-link { display: inline-block; margin: 5px 8px 0 0; font-size: 11px; }
 .settings-card { display: grid; gap: 14px; }
 .settings-card > label { margin-top: 0; }
 .settings-card .publishing-windows-editor, .settings-card .profile-actions, .settings-card .backup-actions { margin-top: 0; padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
@@ -341,6 +350,7 @@ footer { margin: 18px 2px 6px; }
   .diagnostics-meta { grid-template-columns: repeat(2, 1fr); }
   .preflight-checks { grid-template-columns: 1fr; }
   .analytics-detail { grid-template-columns: 1fr; }
+  .session-summary-meta { grid-template-columns: 1fr; }
   .bank-row { align-items: stretch; flex-direction: column; }
   .bank-row button { width: 100%; }
   .settings-card .profile-actions, .settings-card .backup-actions .controls-row { grid-template-columns: 1fr; }
