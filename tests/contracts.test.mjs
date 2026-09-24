@@ -488,6 +488,15 @@ test('Settings and Backup cards use the shared card radius and aligned action la
   assert.match(styles, /\.settings-card \.backup-actions \.controls-row \{ display: grid; grid-template-columns: repeat\(2, minmax\(0, 1fr\)/);
 });
 
+test('Badge mode changes persist and apply immediately without browser restart', () => {
+  assert.match(serviceWorker, /case 'UPDATE_SETTINGS'/);
+  assert.match(serviceWorker, /await saveSettings\(message\.settings\)/);
+  assert.match(serviceWorker, /await broadcast\(updated\)/);
+  assert.match(serviceWorker, /await updateBadge\(snapshot\)/);
+  assert.match(serviceWorker, /settings\.badgeMode === 'COUNT'/);
+  assert.match(serviceWorker, /settings\.badgeMode === 'STATUS'/);
+});
+
 test('daily-limit internal code is translated only at the UI presentation boundary', () => {
   assert.match(errorMessages, /X_DAILY_POST_LIMIT_REACHED/);
   assert.match(errorMessages, /errors\.dailyPostLimitReached/);

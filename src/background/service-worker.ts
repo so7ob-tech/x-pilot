@@ -842,7 +842,12 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       bankDiffs.delete(`${workspaceId}:${message.bankId}`);
       return { discarded: true };
     }
-    case 'UPDATE_SETTINGS': await saveSettings(message.settings); return updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, ...message.settings, updatedAt: Date.now() } : state.session }));
+    case 'UPDATE_SETTINGS': {
+      await saveSettings(message.settings);
+      const updated = await updateRuntimeState((state) => ({ ...state, session: state.session ? { ...state.session, ...message.settings, updatedAt: Date.now() } : state.session }));
+      await broadcast(updated);
+      return updated;
+    }
     case 'SCHEDULE': return scheduleSession(message.workspaceId ?? (await getMeta()).activeWorkspaceId, message.startAt);
     case 'RESCHEDULE': return scheduleSession(message.workspaceId ?? (await getMeta()).activeWorkspaceId, message.startAt);
     case 'CANCEL_SCHEDULE': {
